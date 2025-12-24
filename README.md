@@ -1,3 +1,5 @@
+# THIS README WAS GENERATED AUTOMATICALLY, PROCEED WITH CARE
+
 # etna
 
 A small collection of personal scripts for text checking / editorial workflows.
