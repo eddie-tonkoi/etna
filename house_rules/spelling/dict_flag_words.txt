@@ -1,0 +1,48 @@
+yogurt => yoghurt
+color => colour
+favorite => favourite
+center => centre
+analyze => analyse
+realize => realise
+defense => defence
+traveled => travelled
+jewelry => jewellery
+curb => kerb for edge of pavement
+license => licence for noun, license for verb
+sidewalk => pavement
+truck => lorry
+cookie => biscuit
+
+burned toast => burnt toast
+burned sugar => burnt sugar
+burned ends => burnt ends
+burned sienna => burnt sienna
+burned umber => burnt umber
+burned ochre => burnt ochre
+burned offering => burnt offering
+burned to a crisp => burnt to a crisp
+burned alive => burnt alive
+
+spoiled brat => spoilt brat
+spoiled child => spoilt child
+spoiled boy => spoilt boy
+spoiled girl => spoilt girl
+
+spelled out => spelt out
+well-spelled => well-spelt
+
+leaped up => leapt up
+leaped out => leapt out
+leaped away => leapt away
+
+kneeled down => knelt down
+kneeled beside => knelt beside
+kneeled before => knelt before
+
+smelled of => smelt of
+smelled like => smelt like
+
+dreamed-up scheme => dreamt-up scheme
+dreamed-of life => dreamt-of life
+
+learned behaviour => learnt behaviour (except in psychology)

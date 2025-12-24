@@ -1,0 +1,16 @@
+paths:
+  books_root: "../example"
+
+  house_rules_root: "house_rules"
+  grammar_custom_txt: "house_rules/grammar/grammar_custom.txt"
+  grammar_custom_xml: "house_rules/grammar/grammar_custom.xml"
+
+  dict_custom_txt: "house_rules/spelling/dict_custom.txt"
+  dict_flag_words_txt: "house_rules/spelling/dict_flag_words.txt"
+
+  cliches_txt: "house_rules/style/cliches.txt"
+  compound_style_txt: "house_rules/style/compound_style.txt"
+  duplicate_whitelist_txt: "house_rules/style/duplicate_whitelist.txt"
+  repetition_stop_full_txt: "house_rules/style/repetition_stop_full.txt"
+  repetition_stop_soft_txt: "house_rules/style/repetition_stop_soft.txt"
+  

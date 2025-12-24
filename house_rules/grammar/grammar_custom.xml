@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rules lang="en"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="../grammar.xsd">
+
+  <!-- ===========================================================
+       ETNA: CUSTOM BRITISH STYLE -wards RULESET (POS-AWARE)
+       =========================================================== -->
+
+  <category id="ETNA_WARD_RULES" name="Custom -wards preference rules">
+
+    <!-- =======================================================
+         1. Prefer “towards” over “toward”
+         ======================================================= -->
+    <rule id="ETNA_TOWARD_TO_TOWARDS" name="Prefer 'towards'">
+      <pattern>
+        <token regexp="yes" case_sensitive="no">toward</token>
+      </pattern>
+      <message>Use ‘towards’ for consistency.</message>
+      <suggestion>towards</suggestion>
+
+      <example correction="towards">
+        He walked <marker>toward</marker> the sea.
+      </example>
+    </rule>
+
+
+    <!-- =======================================================
+         2. Prefer -wards over -ward for adverbial uses
+
+            backward  → backwards
+            upward    → upwards
+            downward  → downwards
+            inward    → inwards
+            outward   → outwards
+            afterward → afterwards
+            onward    → onwards
+            homeward  → homewards
+            seaward   → seawards
+            landward  → landwards
+            skyward   → skywards
+            northward → northwards
+            southward → southwards
+            eastward  → eastwards
+            westward  → westwards
+            leftward  → leftwards
+            rightward → rightwards
+
+         POS-awareness:
+           - DON'T fire if the next token is a noun
+             (e.g. "backward compatibility", "upward trend",
+                   "seaward breeze", "northward journey")
+         ======================================================= -->
+    <rule id="ETNA_WARD_ADD_S" name="Prefer -wards over -ward (adverbs)">
+      <pattern>
+        <token regexp="yes" case_sensitive="no">
+          backward|upward|downward|inward|outward|afterward|
+          onward|homeward|seaward|landward|skyward|
+          northward|southward|eastward|westward|
+          leftward|rightward
+          <!-- If followed by a noun, treat as adjectival and skip -->
+          <exception scope="next" postag_regexp="yes" postag="NN.*"/>
+        </token>
+      </pattern>
+
+      <message>Use the ‘-wards’ form for consistency.</message>
+
+      <!-- Transform backward → backwards, etc. -->
+      <suggestion>
+        <match no="1" regexp_match="(.*)ward" regexp_replace="$1wards"/>
+      </suggestion>
+
+      <example correction="backwards">
+        He stumbled <marker>backward</marker> into the chair.
+      </example>
+      <example correction="downwards">
+        The smoke drifted <marker>downward</marker>.
+      </example>
+    </rule>
+
+    <!-- =======================================================
+         2b. Prefer -ward (not -wards) before nouns (adjectival)
+
+             backwards → backward
+             upwards   → upward
+             downwards → downward
+             inwards   → inward
+             outwards  → outward
+             afterwards→ afterward
+             onwards   → onward
+             homewards → homeward
+             seawards  → seaward
+             landwards → landward
+             skywards  → skyward
+             northwards→ northward
+             southwards→ southward
+             eastwards → eastward
+             westwards → westward
+             leftwards → leftward
+             rightwards→ rightward
+             forwards  → forward
+
+         Only fires when the -wards word is followed by a noun,
+         i.e. in adjectival or fixed collocation use:
+           - backward compatibility
+           - upward trend
+           - outward journey
+           - forward planning
+         ======================================================= -->
+    <rule id="ETNA_WARDS_TO_WARD_ADJECTIVAL"
+          name="Prefer -ward before nouns (adjectival)">
+      <pattern>
+        <!-- Match -wards forms only when followed by a noun -->
+        <token regexp="yes" case_sensitive="no">
+          backwards|upwards|downwards|inwards|outwards|
+          afterwards|onwards|homewards|seawards|landwards|skywards|
+          northwards|southwards|eastwards|westwards|
+          leftwards|rightwards|forwards
+        </token>
+        <token postag_regexp="yes" postag="NN.*"/>
+      </pattern>
+
+      <message>Use the ‘-ward’ form before a noun (e.g. ‘upward trend’, ‘backward compatibility’).</message>
+
+      <!-- Transform backwards → backward, etc. -->
+      <suggestion>
+        <match no="1" regexp_match="(.*)wards" regexp_replace="$1ward"/>
+      </suggestion>
+
+      <example correction="upward">
+        An <marker>upwards</marker> trend in sales.
+      </example>
+      <example correction="backward">
+        The company focused on <marker>backwards</marker> compatibility.
+      </example>
+      <example correction="forward">
+        Their <marker>forwards</marker> planning saved the project.
+      </example>
+    </rule>
+
+
+    <!-- =======================================================
+         3. Optional: Prefer “forwards” over “forward”
+            POS-aware:
+
+            - DON'T fire when:
+                * previous token is a verb (VB.*):
+                    lean forward, stepped forward, looked forward, move forward
+                * OR next token is a noun:
+                    forward planning, forward motion
+
+            Disabled by default; set default="on" or remove the
+            attribute if you want it always active.
+         ======================================================= -->
+    <rule id="ETNA_WARD_FORWARD_TO_FORWARDS"
+          name="Prefer 'forwards' (POS-aware, optional)"
+          default="on">
+
+      <pattern>
+        <token case_sensitive="no">forward
+          <!-- Exempt verb + forward: lean forward, step forward, look forward -->
+          <exception scope="previous" postag_regexp="yes" postag="VB.*"/>
+          <!-- Exempt adjectival forward before noun: forward planning -->
+          <exception scope="next" postag_regexp="yes" postag="NN.*"/>
+        </token>
+      </pattern>
+
+      <message>
+        Use ‘forwards’ to match your optional -wards style.
+        This rule is advisory — review whether ‘forward’ is appropriate in context.
+      </message>
+      <suggestion>forwards</suggestion>
+
+      <example correction="forwards">
+        He shuffled <marker>forward</marker> awkwardly.
+      </example>
+    </rule>
+
+  </category>
+
+</rules>

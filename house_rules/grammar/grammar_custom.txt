@@ -1,0 +1,71 @@
+MORFOLOGIK_RULE_EN_GB
+MORFOLOGIK_RULE_EN_US
+IN_THIS_MOMENT
+OXFORD_SPELLING_Z_NOT_S
+GONNA
+GOTTA
+OUTTA
+WANNA
+WHATCHA
+GIMME
+DUNNO
+ER
+NOT_SURE_IT_WORKS
+ENGLISH_WORD_REPEAT_BEGINNING_RULE
+TRUNK_BOOT
+COMMA_COMPOUND_SENTENCE_2
+MISSING_COMMA_AFTER_INTRODUCTORY_PHRASE
+SENTENCE_WHITESPACE
+UPPERCASE_SENTENCE_START
+CAPITALIZATION_NNP_DERIVED
+MISSING_PAST_TENSE
+NOUN_AROUND_IT
+EN_GB_SIMPLE_REPLACE_DRAPES
+TAKE_A_BATH
+AUXILIARY_DO_WITH_INCORRECT_VERB_FORM
+IN_THE_MOMENT
+SHORT_SUPERLATIVES
+DOUBLE_NEGATIVE
+POSSESSIVE_CASE
+KNOW_NOW
+COLLECTIVE_NOUN_VERB_AGREEMENT_VBP
+
+```text
+...estry, careful not to disturb the broom I left leaning there.  Their voices drift on, low and ...
+```
+
+```text
+...e thing that’s mine.  It gives me joy.  Out loud, I say, “Doesn’t drawing give you ...
+```
+```text
+He smiles at me then, sheepish but glowing faintly, like a candle braving a draft. “I’ll tell you when I’m sure.
+```
+
+
+```text
+...y that living does.  He leans down; his hair brushes my shoulder. I feel the tremor of his b...
+```
+```text
+He smiles at me then, sheepish but glowing faintly, like a candle braving a draft. “I’ll tell you when I’m sure.
+```
+
+```text
+...s people think they know. As if there’s a me to be known. I’ve never quite found him...
+```
+
+
+```text
+...s stone—then the fog lifts from her gaze and she smiles, sheepish and tender.  “Oh, ...
+```
+```text
+...s. “I need to wait here for him.”  “For who?”  Her face folds in confusion, and gui...
+```
+
+```text
+preamble.
+```
+EN_COMPOUNDS_MID_AIR
+EN_DATE_WEEKDAY_CURRENTYEAR
+GATHER_UP
+GOT_GOTTEN
+RIGHT_OVER

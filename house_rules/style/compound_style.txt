@@ -1,0 +1,121 @@
+# Compound / Hyphenation House-Style
+# preferred <= alternatives
+# (You can comment out lines you don’t care about.)
+
+# ——— Diacritics ———
+café <= cafe
+
+# ——— Common modern compounds ———
+email <= e-mail
+ebook <= e-book, e book
+online <= on-line
+homepage <= home-page
+website <= web-site
+internet <= Internet   # stylistic, optional normalisation
+
+# ——— Work & organisation words ———
+coworker <= co-worker, co worker
+cooperate <= co-operate
+coordinate <= co-ordinate
+reenter <= re-enter
+reissue <= re-issue
+backup <= back-up, back up
+checkup <= check-up
+
+# ——— Time & chronology ———
+timeframe <= time-frame, time frame
+timeline <= time-line, time line
+timescale <= time-scale, time scale
+yearlong <= year-long
+weekday <= week-day
+weeknight <= week-night
+
+# ——— Movement / direction ———
+backseat <= back-seat
+backstory <= back-story
+backtrack <= back-track
+bypass <= by-pass
+downstairs <= down-stairs
+upstairs <= up-stairs
+
+# ——— People & relationships ———
+childcare <= child-care, child care
+grandparent <= grand-parent, grand parent
+stepfather <= step-father, step father
+stepmother <= step-mother, step mother
+
+# ——— Objects, places, physical things ———
+storyline <= story-line, storyline   # keep whichever you prefer
+storyboard <= story-board
+notebook <= note-book, note book
+handbag <= hand-bag, hand bag
+shoelace <= shoe-lace, shoe lace
+teacup <= tea-cup, tea cup
+teaspoon <= tea-spoon, tea spoon
+bookshop <= book-shop, book shop
+bookcase <= book-case, book case
+doorframe <= door-frame, door frame
+
+# ——— Household / day-to-day ———
+dishwasher <= dish-washer, dish washer
+laptop <= lap-top, lap top
+headphone <= head-phone, head phone
+headphones <= head-phones, head phones
+phonecall <= phone-call, phone call   # caveat: some prefer 'phone call'
+cupboard <= cup-board, cup board
+dustbin <= dust-bin, dust bin
+washing machine <= washing-machine, washingmachine
+
+# ——— Weather & nature ———
+rainwater <= rain-water, rain water
+sunlight <= sun-light, sun light
+sunrise <= sun-rise
+sunset <= sun-set
+moonlight <= moon-light, moon light
+starlight <= star-light, star light
+footpath <= foot-path, foot path
+
+# ——— Technology ———
+smartphone <= smart-phone, smart phone
+database <= data-base, data base
+notepad <= note-pad, note pad
+login <= log-in
+logout <= log-out
+filename <= file-name, file name   # fiction sometimes uses spaced version
+
+# ——— Health / body / movement ———
+heartbeat <= heart-beat, heart beat
+haircut <= hair-cut, hair cut
+handshake <= hand-shake, hand shake
+bloodstain <= blood-stain, blood stain
+fingernail <= finger-nail, finger nail
+
+# ——— Psychology / abstract ———
+backdrop <= back-drop, back drop
+mindset <= mind-set, mind set
+breakdown <= break-down, break down
+breakthrough <= break-through, break through
+setup <= set-up, set up
+follow-up <= followup, follow up
+cleanup <= clean-up, clean up
+
+# ——— Journalism / media / storytelling ———
+newspaper <= news-paper, news paper
+newsroom <= news-room, news room
+broadcast <= broad-cast, broad cast
+soundtrack <= sound-track, sound track
+flashback <= flash-back, flash back
+voiceover <= voice-over, voice over
+
+# ——— Colloquial / modern fiction ———
+everyday <= every-day, every day
+anytime <= any-time, any time
+nowadays <= now-a-days, now a days
+backyard <= back-yard, back yard
+anymore <= any-more
+
+# ——— Idioms or fixed forms ———
+goodnight <= good-night
+goodbye <= good-bye
+
+# Feel free to extend or override anything above.

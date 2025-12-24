@@ -1,0 +1,19 @@
+spacy==3.8.7
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85
+
+# Optional (GPL): the LanguageTool *Python wrapper* is intentionally NOT included by default.
+# Some scripts can use it to talk to a separately running LanguageTool server.
+# If you want that functionality, install it separately via `requirements-gpl.txt`.
+
+nltk==3.9.1
+num2words==0.5.14
+
+pandas==2.3.0
+matplotlib==3.9.4
+python-docx==1.2.0
+
+rich==14.0.0
+requests==2.32.4
+RapidFuzz==3.13.0
+PyYAML==6.0.2
+psutil==7.0.0
