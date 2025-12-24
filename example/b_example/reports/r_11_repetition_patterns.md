@@ -1,5 +1,5 @@
 # 🔁 Word Repetition Report — Focus Lemmas
-_Generated: 2025-12-23 21:14:09_
+_Generated: 2025-12-24 11:34:17_
 
 This report focuses on a curated set of body-language, reaction,
 and intensifier lemmas. It only shows lemmas that are both frequent

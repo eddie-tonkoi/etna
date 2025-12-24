@@ -1,4 +1,5 @@
 # 📁 shared/common.py
+from pathlib import Path
 from docx import Document
 
 def find_docx_file(cwd):
