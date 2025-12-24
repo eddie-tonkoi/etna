@@ -183,6 +183,8 @@ Run scripts directly, for example:
 python path/to/script.py --help
 ```
 
+### But personally, I run scripts/pipeline.py and use that menu to run the codes.
+
 Each script documents its assumptions and arguments at the top of the file.
 
 ## Contributing
