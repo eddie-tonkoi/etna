@@ -34,7 +34,7 @@ from typing import Any, Dict, List, Tuple
 RULE_HEADING = re.compile(r'^(?:rule|chapter)\s*(?:#\s*)?(\d+)\s*[:.\-–—.]?\s*(.*)$', re.IGNORECASE)
 EPILOGUE_HEADING = re.compile(r'^\s*epilogue\b[:.\-–—.]?\s*(.*)$', re.IGNORECASE)
 
-EXPECTED_STYLES = {"Normal", "Body Text", "Heading 1", "Heading 2", "Vellum Flush Left", "Vellum Text Conversation", "Vellum Chapter Title", "Vellum Verse", "Vellum Hidden Heading", "Vellum Element Subtitle", "Vellum Centered Text", "Vellum Inline Image", "Quote"}
+EXPECTED_STYLES = {"Normal", "Body Text", "Heading 1", "Heading 2", "Heading 3", "Vellum Flush Left", "Vellum Text Conversation", "Vellum Chapter Title", "Vellum Verse", "Vellum Hidden Heading", "Vellum Element Subtitle", "Vellum Centered Text", "Vellum Inline Image", "Quote"}
 
 def read_docx_lines_with_checks(path: Path) -> Tuple[List[str], List[Dict[str, Any]]]:
     """
