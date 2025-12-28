@@ -16,6 +16,7 @@ It does three main things:
      - and lowercase forms.
    - Loads an optional `dict_flag_words.txt` mapping “wrong ⇒ right” for words you
      always want to fix (even if Hunspell would accept them).
+   - You can suppress a specific flagged word by adding its UPPERCASE form (e.g. TRUCK) to dict_book.txt.
 
 2. **Asks Hunspell what it thinks, then filters the noise**
    - Normalises smart quotes to plain quotes and strips out bracketed comments
@@ -210,7 +211,13 @@ target_path = Path(args.path)
 print(f"🔍 Running spelling fix on: {target_path.resolve()}")
 
 DICT_BOOK = target_path / "dict_book.txt"
+
 REPORT = target_path / "reports/r_03_spellcheck.md"
+
+# UPPERCASE tokens in dict_book.txt matching this pattern are treated as
+# per-book allow-list entries for house-rule flagged words.
+# (Avoids accidentally treating section headers like ###_NAMES_### as allow rules.)
+ALLOW_FLAGGED_TOKEN_RE = re.compile(r"^[A-Z][A-Z'-]*$")
 
 
 # ---------------- Helpers ----------------
@@ -398,6 +405,17 @@ def check_spelling(chunk, custom_words, flag_words=None, lang="en_GB", debug=Fal
     # Categorize dictionary
     phrases, custom_exact, custom_lower = categorize_dictionary(custom_words)
 
+    # Allow-list for house-rule "flagged" words.
+    # Convention: put the UPPERCASE form of a flagged word (e.g. `TRUCK`) in dict_book.txt
+    # to suppress that specific flagged warning for this project.
+    allowed_flagged = {w.lower() for w in custom_exact if ALLOW_FLAGGED_TOKEN_RE.fullmatch(w)}
+
+    if debug:
+        # Keep this lightweight: show whether the common case is enabled and how many allow-rules exist.
+        print(f"[debug] allowed_flagged_count={len(allowed_flagged)}")
+        if "truck" in allowed_flagged:
+            print("[debug] allow rule enabled: TRUCK")
+
     # Mask phrases from dictionary (longest first)
     PHRASE_MARKER = "CUSTOMPHRASE"
     masked_chunk = chunk
@@ -413,12 +431,18 @@ def check_spelling(chunk, custom_words, flag_words=None, lang="en_GB", debug=Fal
         for w in re.findall(r"\b[\w'-]+\b", chunk):
             lw = w.lower()
             if lw in flag_words:
+                # If explicitly allow-listed (e.g. `TRUCK` in dict_book.txt), suppress.
+                if lw in allowed_flagged:
+                    if debug:
+                        print(f"[debug] suppressed flagged rule {lw.upper()} for token={w!r}")
+                    continue
                 ctx = find_word_context(original_chunk, w)
                 errs.append({
                     "type": "flagged",
+                    "rule": lw.upper(),
                     "word": w,
                     "context": ctx,
-                    "suggestion": flag_words[lw]
+                    "suggestion": flag_words[lw],
                 })
 
     # Tokenize
@@ -605,6 +629,9 @@ def main():
                 f.write(f"- Types: {', '.join(sorted(types))}\n")
                 if sugg:
                     f.write(f"- Suggestion: **{sugg}**\n")
+                rules = {e.get("rule") for e in items if e.get("type") == "flagged" and e.get("rule")}
+                if rules:
+                    f.write(f"- Rule: {', '.join(sorted(rules))} (add to dict_book.txt to allow)\n")
                 f.write(f"- Occurrences: {len(items)}\n\n")
                 for e in items:
                     chunk = e.get("chunk", "unknown")
