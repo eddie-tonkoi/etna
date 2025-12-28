@@ -28,6 +28,7 @@ import argparse
 from pathlib import Path
 import re
 from datetime import datetime
+from collections import Counter
 import sys
 
 # Allow importing shared config loader from scripts/common/common.py
@@ -405,15 +406,13 @@ def main():
 
     all_issues.sort(key=lambda x: (x["type"], x["file"], x["line"]))
 
+    # Count how many times each issue type appears (used for headings + terminal summary)
+    issue_counts = Counter(issue["type"] for issue in all_issues)
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(f"# 🧾 Structure Check Report\n")
         f.write(f"_Generated: {timestamp}_\n\n")
-
-        from collections import Counter
-
-        # Count how many times each issue type appears
-        issue_counts = Counter(issue["type"] for issue in all_issues)
 
         current_type = None
         for issue in all_issues:
@@ -422,15 +421,20 @@ def main():
                 count = issue_counts[current_type]
                 f.write(f"\n## 🔹 {current_type} — {count} instance{'s' if count != 1 else ''}\n")
 
-
             f.write(f"### `{issue['file']}:{issue['line']}`\n\n")
             f.write("```text\n")
             f.write(issue["context"].strip() + "\n")
             f.write("```\n\n")
 
 
-    print(f"✅ Structure check complete — {len(all_issues)} issues found")
-    print(f"📄 Report written to {output_path}")
+    # Terminal one-liner: make it obvious whether the report is worth opening.
+    total = len(all_issues)
+    kinds = len(issue_counts)
+
+    if total == 0:
+        print(f"✅ No structural issues found — report written to {output_path}")
+    else:
+        print(f"⚠️  Found {total} structural issue(s) across {kinds} type(s) — open {output_path}")
 
 if __name__ == "__main__":
     main()

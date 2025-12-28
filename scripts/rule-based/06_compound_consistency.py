@@ -260,4 +260,26 @@ with report_path.open("w", encoding="utf-8") as out:
     if not any_issues:
         out.write("✅ No compound/ hyphenation inconsistencies found in the text.\n")
 
-print(f"✅ Compound style report written to {report_path}")
+# Terminal one-liner: make it obvious whether the report is worth opening.
+issue_families = 0
+variant_hits = 0
+
+for key, info in style_families.items():
+    alts = info["alts"]
+    counts = per_family[key]["counts"]
+
+    total_any = sum(counts.values())
+    if total_any == 0:
+        continue
+
+    variants_used = [(form, counts[form]) for form in alts if counts.get(form, 0) > 0]
+    if variants_used:
+        issue_families += 1
+        variant_hits += sum(c for _, c in variants_used)
+
+if issue_families == 0:
+    print(f"✅ No compound/hyphenation inconsistencies found — report written to {report_path}")
+else:
+    print(
+        f"⚠️  Found {issue_families} compound family issue(s) ({variant_hits} variant use(s)) — open {report_path}"
+    )

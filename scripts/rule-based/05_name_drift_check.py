@@ -282,7 +282,7 @@ print(f"📦 Total unique lexicon entries (after merge): {len(LOCAL_LEXICON):,}\
 occurrences, counts = collect_capitalised_tokens()
 if not occurrences:
     print("No capitalised tokens found.")
-    exit(0)
+    raise SystemExit(0)
 
 all_lower_tokens = {entry["token_lower"] for entry in occurrences}
 unknown_by_hunspell = hunspell_unknown_words(all_lower_tokens)
@@ -347,7 +347,6 @@ for canon, var, c_canon, c_var, score in pairs:
 # ——— Write report ———
 
 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-reports_dir.mkdir(parents=True, exist_ok=True)
 
 with report_path.open("w", encoding="utf-8") as out:
     out.write("# 🧾 Name / Proper Noun Consistency Report\n\n")
@@ -358,6 +357,7 @@ with report_path.open("w", encoding="utf-8") as out:
         f"- Maximum variant frequency: `{MAX_VARIANT_FREQ}`\n"
         f"- Minimum fuzzy similarity: `{MIN_FUZZY_SIMILARITY}`\n\n"
     )
+
     out.write("## Dictionaries loaded\n\n")
     out.write(f"- Per-book: `{book_dict_path.resolve()}`\n")
     for p, n in sorted(book_counts.items(), key=lambda kv: kv[0].name.lower()):
@@ -401,21 +401,24 @@ with report_path.open("w", encoding="utf-8") as out:
 
             # Show contexts for canonical + variants
             out.write("### Contexts\n\n")
-            # Canonical contexts
             out.write(f"**Canonical `{canon}`:**\n\n")
             for occ in by_token[canon][:10]:  # limit for sanity
-                out.write(
-                    f"- {occ['file']} L{occ['line_no']}: {occ['context']}\n"
-                )
+                out.write(f"- {occ['file']} L{occ['line_no']}: {occ['context']}\n")
             out.write("\n")
 
-            # Variant contexts
             for var, _, _, _ in variants:
                 out.write(f"**Variant `{var}`:**\n\n")
                 for occ in by_token[var]:
-                    out.write(
-                        f"- {occ['file']} L{occ['line_no']}: {occ['context']}\n"
-                    )
+                    out.write(f"- {occ['file']} L{occ['line_no']}: {occ['context']}\n")
                 out.write("\n")
 
-print(f"✅ Name consistency report written to {report_path}")
+# Terminal one-liner: make it obvious whether the report is worth opening.
+num_groups = len(grouped)
+num_pairs = sum(len(v) for v in grouped.values())
+
+if not grouped:
+    print(f"✅ No suspicious name or place drift detected — report written to {report_path}")
+else:
+    print(
+        f"⚠️  Possible name/place drift found: {num_groups} name(s), {num_pairs} variant pair(s) — open {report_path}"
+    )

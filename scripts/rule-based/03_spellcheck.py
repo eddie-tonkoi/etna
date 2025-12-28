@@ -580,7 +580,7 @@ def main():
             issue["chunk"] = f.name
         spelling.extend(issues)
 
-    print(f"🧮 Total issues found: {len(spelling)}")
+    # (removed total issues print)
 
     # -------- Write report --------
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -639,7 +639,21 @@ def main():
                     f.write(f"  - `{chunk}` — {ctx}\n")
                 f.write("\n")
 
-    print(f"✅ Wrote report to {REPORT}")
+    # Terminal one-liner: make it obvious whether the report is worth opening.
+    total = len(spelling)
+    spelling_n = sum(1 for e in spelling if e.get("type") == "spelling")
+    flagged_n = sum(1 for e in spelling if e.get("type") == "flagged")
+
+    if total == 0:
+        print(f"✅ No spelling/house-rule issues found — report written to {REPORT}")
+    else:
+        parts = []
+        if spelling_n:
+            parts.append(f"{spelling_n} spelling")
+        if flagged_n:
+            parts.append(f"{flagged_n} flagged")
+        detail = ", ".join(parts) if parts else f"{total} issues"
+        print(f"⚠️  Found {total} issue(s) ({detail}) — open {REPORT}")
 
 
 if __name__ == "__main__":
