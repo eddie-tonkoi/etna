@@ -17,7 +17,7 @@ It works line‑by‑line, looking for things such as:
 - non‑British date formats, time abbreviations, or title styles
 - unexpected contraction starters or suspicious apostrophes
 
-It also checks each line against your accepted structure list (`book_struct.txt`)
+It also checks each line against your accepted structure list (`struct_book.txt`)
 so known, intentional patterns won’t be flagged.
 
 The output is a tidy markdown report grouping each issue type, showing where it
@@ -61,7 +61,7 @@ if not GLOBAL_DICT.exists():
     print("Check paths.dict_custom_txt in etna/scripts/common/config.yaml.")
     sys.exit(1)
 
-ACCEPTED_STRUCT = target_path / "book_struct.txt"
+ACCEPTED_STRUCT = target_path / "struct_book.txt"
 DICT_BOOK = target_path / "dict_book.txt"
 
 if not DICT_BOOK.exists():
