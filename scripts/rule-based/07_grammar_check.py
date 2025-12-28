@@ -409,15 +409,45 @@ def start_languagetool_server():
 
     # If we get here, it failed to start — dump stderr
     print("❌ LanguageTool server failed to start.")
+
+    err_text = ""
     if lt_process:
         try:
             _, err = lt_process.communicate(timeout=2)
-            print("🧾 Server output:\n", err)
+            err_text = (err or "").strip()
+            if err_text:
+                print("🧾 Server output:\n", err_text)
         except Exception:
             print("🧾 Server output could not be read (timeout or other error).")
         finally:
             lt_process.terminate()
-    exit(1)
+
+    # If the port is bound but the health-check failed, explain how to find/kill the listener.
+    if (
+        "Address already in use" in err_text
+        or "PortBindingException" in err_text
+        or "BindException" in err_text
+    ):
+        print("")
+        print(
+            f"ℹ️  Port {LT_PORT} is already in use, and the service listening at {LT_URL} did not respond as a LanguageTool server."
+        )
+        print("To identify what is using the port:")
+        print(f"  lsof -nP -iTCP:{LT_PORT} -sTCP:LISTEN")
+        print("To stop it:")
+        print("  kill <PID>")
+        print("If it refuses:")
+        print("  kill -9 <PID>")
+        print("")
+        print("Then re-run this script (or choose another port with --port).")
+        sys.exit(1)
+
+    # Generic guidance (no extra fallbacks)
+    print("")
+    print("Fix options:")
+    print(f"  - check whether something is already using the port: lsof -nP -iTCP:{LT_PORT} -sTCP:LISTEN")
+    print(f"  - or re-run with a different port: --port {LT_PORT + 1}")
+    sys.exit(1)
 
 def stop_languagetool_server():
     global lt_process
