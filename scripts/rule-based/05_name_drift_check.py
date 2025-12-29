@@ -412,13 +412,13 @@ with report_path.open("w", encoding="utf-8") as out:
                     out.write(f"- {occ['file']} L{occ['line_no']}: {occ['context']}\n")
                 out.write("\n")
 
-# Terminal one-liner: make it obvious whether the report is worth opening.
+# Terminal summary: path first, then a concise final status line.
 num_groups = len(grouped)
 num_pairs = sum(len(v) for v in grouped.values())
 
+print(f"Report written to {report_path}")
+
 if not grouped:
-    print(f"✅ No suspicious name or place drift detected — report written to {report_path}")
+    print("✅ No suspicious name/place drift detected")
 else:
-    print(
-        f"⚠️  Possible name/place drift found: {num_groups} name(s), {num_pairs} variant pair(s) — open {report_path}"
-    )
+    print(f"⚠️  Possible name/place drift: {num_groups} name(s), {num_pairs} variant pair(s)")

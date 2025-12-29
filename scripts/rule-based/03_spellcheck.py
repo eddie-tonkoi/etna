@@ -55,6 +55,7 @@ import subprocess
 import re
 import sys
 from collections import Counter, defaultdict
+from tqdm import tqdm
 
 # ---------------- Config ----------------
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -571,14 +572,30 @@ def main():
         print(f"❌ No .txt files found in {chunk_dir}")
         return
 
-    for i, f in enumerate(chunk_files, 1):
+    pbar = tqdm(
+        chunk_files,
+        desc="Scanning chapters",
+        dynamic_ncols=True,
+        file=sys.stdout,
+        mininterval=0.3,
+    )
+
+    for f in pbar:
         chunk = f.read_text(encoding="utf-8", errors="replace")
-        print(f"🔍 Spellcheck Chunk {i}/{len(chunk_files)} — {f.name}")
-        issues = check_spelling(chunk, custom_words, flag_words=flag_words, lang=args.lang, debug=args.debug)
-        print(f"   ↳ {len(issues)} issue(s)")
+        issues = check_spelling(
+            chunk,
+            custom_words,
+            flag_words=flag_words,
+            lang=args.lang,
+            debug=args.debug,
+        )
+
         for issue in issues:
             issue["chunk"] = f.name
         spelling.extend(issues)
+
+        # Update postfix once per chapter (prevents multiple progress-line rewrites).
+        pbar.set_postfix_str(f"{f.name} • total={len(spelling)}")
 
     # (removed total issues print)
 
@@ -639,13 +656,15 @@ def main():
                     f.write(f"  - `{chunk}` — {ctx}\n")
                 f.write("\n")
 
-    # Terminal one-liner: make it obvious whether the report is worth opening.
+    # Terminal summary: path first, then a concise final status line.
     total = len(spelling)
     spelling_n = sum(1 for e in spelling if e.get("type") == "spelling")
     flagged_n = sum(1 for e in spelling if e.get("type") == "flagged")
 
+    print(f"Report written to {REPORT}")
+
     if total == 0:
-        print(f"✅ No spelling/house-rule issues found — report written to {REPORT}")
+        print("✅ No spelling/house-rule issues detected")
     else:
         parts = []
         if spelling_n:
@@ -653,7 +672,7 @@ def main():
         if flagged_n:
             parts.append(f"{flagged_n} flagged")
         detail = ", ".join(parts) if parts else f"{total} issues"
-        print(f"⚠️  Found {total} issue(s) ({detail}) — open {REPORT}")
+        print(f"⚠️  Found {total} issue(s) ({detail})")
 
 
 if __name__ == "__main__":

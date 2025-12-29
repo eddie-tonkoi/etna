@@ -247,7 +247,16 @@ def main():
     cliche_matches = defaultdict(list)  # phrase → list of (chapter, context)
 
     chapter_files = sorted(chapter_dir.glob("*.txt"))
-    for chapter_index, file in enumerate(tqdm(chapter_files, desc="Processing chapters"), start=1):
+
+    pbar = tqdm(
+        chapter_files,
+        desc="Scanning chapters",
+        dynamic_ncols=True,
+        file=sys.stdout,
+    )
+
+    for chapter_index, file in enumerate(pbar, start=1):
+        pbar.set_postfix_str(file.name)
         text = file.read_text(encoding="utf-8")
         full_text += text + "\n"  # accumulate text from each chapter
 
@@ -424,8 +433,30 @@ def main():
                 for chapter, context in instances:
                     f.write(f"**{chapter}** — `{context.strip()}`\n\n")
 
-    print(f"✅ Report written to: {report_path}")
-    print(f"📈 Chart saved to: {plot_path}")
+    # Terminal summary: paths first, then a concise final status line.
+    warn_words = [
+        w
+        for w, stats in crutch_stats.items()
+        if stats.get("warning_threshold") is not None and stats.get("per_10k", 0) > stats.get("warning_threshold")
+    ]
+    repeated_n = len(repeated_phrases)
+    cliche_n = len(sorted_cliches)
+
+    print(f"Report written to {report_path}")
+    print(f"Chart written to {plot_path}")
+
+    if (not warn_words) and repeated_n == 0 and cliche_n == 0:
+        print("✅ No style-expression issues detected")
+    else:
+        parts = []
+        if warn_words:
+            parts.append(f"{len(warn_words)} crutch-word warning(s)")
+        if repeated_n:
+            parts.append(f"{repeated_n} repeated 'like' pattern(s)")
+        if cliche_n:
+            parts.append(f"{cliche_n} cliché phrase(s)")
+        detail = ", ".join(parts) if parts else "style issues"
+        print(f"⚠️  Found {detail}")
 
 if __name__ == "__main__":
     main()

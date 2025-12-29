@@ -75,6 +75,7 @@ import os
 import sys
 
 import language_tool_python
+from tqdm import tqdm
 
 # ——— CLI Setup ———
 parser = argparse.ArgumentParser(description="Audit -ward/-wards usage in pre-chunked text files.")
@@ -135,6 +136,9 @@ WARD_RULE_IDS = {
 
 
 # ——— Start LanguageTool Server ———
+LT_PORT = int(os.environ.get("ETNA_LANGUAGETOOL_PORT", "8081"))
+LT_URL = f"http://localhost:{LT_PORT}"
+
 lt_process = None  # process handle
 
 def resolve_languagetool_jar() -> Path:
@@ -201,7 +205,7 @@ def start_languagetool_server():
             classpath,
             "org.languagetool.server.HTTPServer",
             "--port",
-            "8081",
+            str(LT_PORT),
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -212,7 +216,7 @@ def start_languagetool_server():
     import requests
     for i in range(15):
         try:
-            response = requests.get("http://localhost:8081/v2/languages", timeout=1)
+            response = requests.get(f"{LT_URL}/v2/languages", timeout=1)
             if response.status_code == 200:
                 print("✅ LanguageTool server is ready.")
                 return
@@ -325,13 +329,21 @@ def main():
         print(f"❌ No chunks found in {chunk_dir}.")
         return
 
-    tool = language_tool_python.LanguageTool('en-GB', remote_server='http://localhost:8081')
+    tool = language_tool_python.LanguageTool('en-GB', remote_server=LT_URL)
 
     results = []
     chunk_files = sorted(chunk_dir.glob("*.txt"))
-    for i, f in enumerate(chunk_files, 1):
+
+    pbar = tqdm(
+        chunk_files,
+        desc="Scanning chapters",
+        dynamic_ncols=True,
+        file=sys.stdout,
+    )
+
+    for f in pbar:
+        pbar.set_postfix_str(f.name)
         chunk = f.read_text(encoding="utf-8")
-        print(f"🔍 Ward/Wards Audit Chunk {i}/{len(chunk_files)} — {f.name}")
         paragraphs = split_paragraphs(chunk)
 
         for p_idx, para in enumerate(paragraphs, start=1):
@@ -447,7 +459,30 @@ def main():
                 f.write(para + "\n")
                 f.write("```\n\n")
 
-    print(f"✅ Wrote ward/wards audit report to {REPORT}")
+    # Terminal summary: path first, then a concise final status line.
+    total_paras = len(results)
+    flagged_tokens = sum(
+        1
+        for entry in results
+        for t in entry.get("tokens", [])
+        if t.get("flagged_by_lt")
+    )
+    unique_rules = {
+        r
+        for entry in results
+        for t in entry.get("tokens", [])
+        for r in t.get("lt_rules", [])
+        if r
+    }
+
+    print(f"Report written to {REPORT}")
+
+    if total_paras == 0:
+        print("✅ No advisory -ward/-wards cases detected")
+    else:
+        print(
+            f"⚠️  Found {total_paras} paragraph(s) flagged ({flagged_tokens} token(s), {len(unique_rules)} rule(s))"
+        )
 
 
 if __name__ == "__main__":

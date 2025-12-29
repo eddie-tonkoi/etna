@@ -320,18 +320,18 @@ def main() -> None:
                     f.write(issue.get('context', '[no context]') + "\n")
                     f.write("```\n\n")
 
-    # Terminal one-liner: make it obvious whether the report is worth opening.
+    # Terminal summary: path first, then a brief final status line.
     num_issues = len(issues)
     num_types = len(summary_counts)
     num_chunk_files = len(list(chapters_dir.glob("*.txt")))
 
+    print(f"Report written to {REPORT.resolve()}")
+
     if num_issues == 0:
-        print(
-            f"✅ Manuscript chunked ({num_chunk_files} file(s)) — no DOCX artefacts detected — report written to {REPORT.resolve()}"
-        )
+        print(f"✅ Manuscript chunked ({num_chunk_files} file(s)) — no DOCX artefacts detected")
     else:
         print(
-            f"⚠️  Manuscript chunked ({num_chunk_files} file(s)) — found {num_issues} artefact(s) across {num_types} type(s) — open {REPORT.resolve()}"
+            f"⚠️  Manuscript chunked ({num_chunk_files} file(s)) — found {num_issues} artefact(s) across {num_types} type(s)"
         )
 
 if __name__ == '__main__':

@@ -109,7 +109,16 @@ def analyse_book(chapters_dir: Path, nlp):
     chapter_order = []
 
     chapter_files = sorted(chapters_dir.glob("*.txt"))
-    for file in tqdm(chapter_files, desc="🔎 Analysing chapters for repetition"):
+
+    pbar = tqdm(
+        chapter_files,
+        desc="Scanning chapters",
+        dynamic_ncols=True,
+        file=sys.stdout,
+    )
+
+    for file in pbar:
+        pbar.set_postfix_str(file.name)
         text = file.read_text(encoding="utf-8", errors="ignore")
         chapter_name = file.stem
         chapter_order.append(chapter_name)
@@ -250,7 +259,14 @@ def main():
     issues = find_potential_problems(total_counts, per_chapter_counts)
     write_report(report_path, total_counts, issues, chapter_order)
 
-    print(f"✅ Repetition report written to {report_path}")
+    # Terminal summary: path first, then a concise final status line.
+    print(f"Report written to {report_path}")
+
+    if not issues:
+        print("✅ No strongly concentrated repetitions detected")
+    else:
+        top_hits = sum(info.get("top_count", 0) for info in issues.values())
+        print(f"⚠️  Found {len(issues)} over-concentrated lemma(s) ({top_hits} top-chapter hit(s))")
 
 
 if __name__ == "__main__":

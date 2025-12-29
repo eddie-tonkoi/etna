@@ -427,14 +427,16 @@ def main():
             f.write("```\n\n")
 
 
-    # Terminal one-liner: make it obvious whether the report is worth opening.
+    # Terminal summary: path first, then a concise final status line.
     total = len(all_issues)
     kinds = len(issue_counts)
 
+    print(f"Report written to {output_path}")
+
     if total == 0:
-        print(f"✅ No structural issues found — report written to {output_path}")
+        print("✅ No structural issues detected")
     else:
-        print(f"⚠️  Found {total} structural issue(s) across {kinds} type(s) — open {output_path}")
+        print(f"⚠️  Found {total} structural issue(s) across {kinds} type(s)")
 
 if __name__ == "__main__":
     main()

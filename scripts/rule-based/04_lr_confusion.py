@@ -332,8 +332,13 @@ def main() -> None:
                     out.write(f"- {it['file']} L{it['line_no']}: {it['context']}\n")
                 out.write("\n</details>\n")
 
-    print(f"✅ LR check complete — {len(all_issues)} occurrences across {len(grouped)} words")
-    print(f"📄 Report written to {output_path}")
+    # Terminal summary: path first, then a concise final status line.
+    print(f"Report written to {output_path}")
+
+    if not all_issues:
+        print("✅ No L↔R confusion issues detected")
+    else:
+        print(f"⚠️  Found {len(all_issues)} occurrence(s) across {len(grouped)} word(s)")
 
 
 if __name__ == "__main__":

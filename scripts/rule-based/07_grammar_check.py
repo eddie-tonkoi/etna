@@ -66,6 +66,7 @@ import re
 import subprocess
 import atexit
 import time
+from tqdm import tqdm
 try:
     import language_tool_python
 except ModuleNotFoundError as e:
@@ -321,7 +322,10 @@ ISSUE_TYPE_WHITELIST = {
 
 
 # ——— Start LanguageTool Server ———
-lt_process = None  # <- this is new and fixes the NameError
+LT_PORT = int(os.environ.get("ETNA_LANGUAGETOOL_PORT", "8081"))
+LT_URL = f"http://localhost:{LT_PORT}"
+
+lt_process = None  # LanguageTool server subprocess handle
 
 def resolve_languagetool_jar() -> Path:
     """Resolve the LanguageTool server JAR.
@@ -389,7 +393,7 @@ def start_languagetool_server():
             classpath,
             "org.languagetool.server.HTTPServer",
             "--port",
-            "8081",
+            str(LT_PORT),
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -400,7 +404,7 @@ def start_languagetool_server():
     import requests
     for i in range(15):
         try:
-            response = requests.get("http://localhost:8081/v2/languages", timeout=1)
+            response = requests.get(f"{LT_URL}/v2/languages", timeout=1)
             if response.status_code == 200:
                 print("✅ LanguageTool server is ready.")
                 return
@@ -561,7 +565,7 @@ def main():
         print(f"❌ No chunks found in {chunk_dir}.")
         return
 
-    tool = language_tool_python.LanguageTool('en-GB', remote_server='http://localhost:8081')
+    tool = language_tool_python.LanguageTool('en-GB', remote_server=LT_URL)
 
     # Load suppressions (ignored phrases and disabled rule IDs)
     suppressions = load_suppressions([GLOBAL_SUPPRESSIONS, BOOK_SUPPRESSIONS])
@@ -570,9 +574,19 @@ def main():
 
     grammar_issues = []
     chunk_files = sorted(chunk_dir.glob("*.txt"))
-    for i, f in enumerate(chunk_files, 1):
+
+    pbar = tqdm(
+        chunk_files,
+        desc="Scanning chapters",
+        dynamic_ncols=True,
+        file=sys.stdout,
+    )
+
+    for f in pbar:
+        # Show current filename beside the bar.
+        pbar.set_postfix_str(f.name)
+
         chunk = f.read_text(encoding="utf-8")
-        print(f"🔍 Grammar Check Chunk {i}/{len(chunk_files)} — {f.name}")
         # Apply suppressions: disables rules and ignores matches in specified contexts
         issues = check_grammar(chunk, tool, disabled_rules, ignored_phrases)
         for issue in issues:
@@ -692,7 +706,16 @@ def main():
 
 
 
-    print(f"✅ Wrote report to {REPORT}")
+    # Terminal summary: path first, then a concise final status line.
+    total_issues = len(grammar_issues)
+    unique_rules = len({e.get("rule") for e in grammar_issues if e.get("rule")})
+
+    print(f"Report written to {REPORT}")
+
+    if total_issues == 0:
+        print("✅ No grammar/house-style issues detected")
+    else:
+        print(f"⚠️  Found {total_issues} issue(s) across {unique_rules} rule(s)")
 
 if __name__ == "__main__":
     main()

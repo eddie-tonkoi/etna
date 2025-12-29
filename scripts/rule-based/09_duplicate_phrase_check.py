@@ -191,7 +191,14 @@ def has_token_overlap(a, b, threshold=TOKEN_OVERLAP_THRESHOLD):
 
 # ——— Build phrase list ———
 all_phrases = []
-for file in sorted(chunk_dir.glob("*.txt")):
+chapter_files = sorted(chunk_dir.glob("*.txt"))
+
+for file in tqdm(
+    chapter_files,
+    desc="Scanning chapters",
+    dynamic_ncols=True,
+    file=sys.stdout,
+):
     all_phrases.extend(extract_phrases(file))
 
 from collections import Counter
@@ -203,7 +210,12 @@ print(f"🔍 Checking fuzzy matches across {len(all_phrases)} phrases...")
 seen = set()
 matches = []
 
-for i in tqdm(range(len(all_phrases)), desc="Fuzzy compare"):
+for i in tqdm(
+    range(len(all_phrases)),
+    desc="Fuzzy compare",
+    dynamic_ncols=True,
+    file=sys.stdout,
+):
     file1, line1, phrase1 = all_phrases[i]
     for j in range(i + 1, len(all_phrases)):
         file2, line2, phrase2 = all_phrases[j]
@@ -268,5 +280,25 @@ with open(report_path, "w", encoding="utf-8") as f:
         f.write("```\n\n")
 
 
-print(f"✅ Duplicate check complete — {len(matches)} matches found")
-print(f"📄 Report saved to {report_path}")
+
+# Terminal summary: path first, then a concise final status line.
+# Count how many matches are strongly asymmetric (one is a stock phrase, the other a one-off).
+asymmetric = 0
+for score, file1, line1, p1, file2, line2, p2 in matches:
+    c1 = PHRASE_COUNTS.get(p1, 1)
+    c2 = PHRASE_COUNTS.get(p2, 1)
+    hi = max(c1, c2)
+    lo = min(c1, c2)
+    if hi >= 5 and lo == 1:
+        asymmetric += 1
+
+total = len(matches)
+print(f"Report written to {report_path}")
+
+if total == 0:
+    print("✅ No near-duplicate phrase drift detected")
+else:
+    if asymmetric:
+        print(f"⚠️  Found {total} near-duplicate pair(s) ({asymmetric} asymmetric)")
+    else:
+        print(f"⚠️  Found {total} near-duplicate pair(s)")

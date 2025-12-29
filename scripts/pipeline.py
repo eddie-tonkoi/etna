@@ -1,7 +1,9 @@
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional, Tuple, Union
 
 import yaml
 
@@ -104,6 +106,22 @@ def get_books_root_from_config() -> Path:
 def clear_terminal():
     os.system("clear" if os.name == "posix" else "cls")
 
+
+# A “status one-liner” is the final summary line each script prints.
+# Convention used across the rule-based scripts: it starts with ✅ (clean) or ⚠️ (needs review) or ❌ (failed).
+# Note: ⚠️ is often emitted as two codepoints: U+26A0 (⚠) + U+FE0F (variation selector).
+# Match ✅ / ❌ / ⚠ with an optional U+FE0F so we reliably detect status lines.
+RUN_ALL_SENTINEL = "__RUN_ALL__"
+STATUS_LINE_RE = re.compile(r"^[✅❌⚠]\uFE0F?\s+")
+
+
+def _extract_status_line(line: str) -> Optional[str]:
+    """Return the status one-liner if this line looks like one; else None."""
+    s = (line or "").strip()
+    if not s:
+        return None
+    return s if STATUS_LINE_RE.match(s) else None
+
 def find_valid_book_folders(books_dir):
     return sorted([
         f for f in books_dir.iterdir()
@@ -126,17 +144,88 @@ def list_script_folders(root_dir: Path) -> list[Path]:
     ]
     return sorted(folders, key=lambda p: p.name.lower())
 
-def run_script(script_path, working_dir):
+def run_script(script_path: Path, working_dir: Path) -> Tuple[int, Optional[str]]:
+    """Run a script, stream its output, and capture its final ✅/⚠️/❌ summary line.
+
+    Returns:
+        (returncode, status_line)
+    """
+    cmd: list[str]
+    cwd: Optional[Path] = None
+
+    if script_path.suffix == ".py":
+        python_bin = sys.executable
+        cmd = [python_bin, str(script_path), str(working_dir)]
+    elif script_path.suffix == ".sh":
+        cmd = ["zsh", str(script_path)]
+        cwd = working_dir
+    else:
+        return (1, f"❌ Unsupported script type: {script_path.name}")
+
+    status_line: Optional[str] = None
+
     try:
-        if script_path.suffix == '.py':
-            python_bin = sys.executable
-            subprocess.run([python_bin, str(script_path), str(working_dir)], check=True)
-        elif script_path.suffix == '.sh':
-            subprocess.run(["zsh", str(script_path)], check=True, cwd=working_dir)
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Script exited with error: {e}")
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(cwd) if cwd else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=False,  # binary mode: preserve '\r' for in-place progress bars
+            bufsize=0,
+        )
+
+        assert proc.stdout is not None
+        # Stream bytes so progress bars using '\r' update in place.
+        out = getattr(sys.stdout, "buffer", None)
+        line_buf = bytearray()
+
+        while True:
+            chunk = proc.stdout.read(1024)
+            if not chunk:
+                if proc.poll() is not None:
+                    break
+                continue
+
+            # Write raw bytes to the terminal (preserves carriage returns).
+            if out is not None:
+                out.write(chunk)
+                out.flush()
+            else:
+                # Fallback if stdout has no buffer.
+                sys.stdout.write(chunk.decode("utf-8", errors="replace"))
+                sys.stdout.flush()
+
+            # Track newline-terminated lines for status one-liner detection.
+            for b in chunk:
+                line_buf.append(b)
+                if b == 10:  # '\n'
+                    line = line_buf.decode("utf-8", errors="replace")
+                    maybe = _extract_status_line(line)
+                    if maybe:
+                        status_line = maybe
+                    line_buf.clear()
+
+        # Catch a final line with no trailing newline.
+        if line_buf:
+            line = line_buf.decode("utf-8", errors="replace")
+            maybe = _extract_status_line(line)
+            if maybe:
+                status_line = maybe
+
+        proc.wait()
+        rc = proc.returncode or 0
+
+        if rc != 0 and not status_line:
+            status_line = f"❌ {script_path.name} failed (exit {rc}) — see output above"
+
+        return (rc, status_line)
+
     except KeyboardInterrupt:
         print("\n🛑 Script interrupted by user (Ctrl+C)")
+        return (130, f"❌ {script_path.name} interrupted (Ctrl+C)")
+    except Exception as e:
+        print(f"❌ Script runner error: {e}")
+        return (1, f"❌ {script_path.name} runner error — {e}")
 
 def show_help(script_path):
     print(f"\n=== Help for {script_path.name} ===")
@@ -170,7 +259,7 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
         print(f"Available scripts for 📂 {working_dir.name} (from 📁 {scripts_dir.name}):")
 
         scripts = []
-        script_indices = {}
+        script_indices: dict[int, Union[Path, str]] = {}
         selected_scripts = []
 
         # Run all option (always available when scripts exist)
@@ -193,7 +282,7 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
                 i += 1
 
         # Always allow 0 to mean “run all” (as long as there are scripts).
-        script_indices[0] = "__RUN_ALL__"
+        script_indices[0] = RUN_ALL_SENTINEL
 
         if not script_indices:
             print(f"\n⚠️  No scripts found in 📁 {scripts_dir.name} (expected .py or .sh).")
@@ -209,8 +298,12 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
         elif choice == '?':
             try:
                 hnum = int(input("Which script number to show help for? ").strip())
-                if hnum in script_indices and script_indices[hnum] != "__RUN_ALL__":
-                    show_help(script_indices[hnum])
+                if hnum in script_indices:
+                    target = script_indices[hnum]
+                    if isinstance(target, Path):
+                        show_help(target)
+                    else:
+                        print("Invalid number.")
                 else:
                     print("Invalid number.")
             except ValueError:
@@ -222,11 +315,45 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
                     selected = script_indices[index]
                     clear_terminal()
 
-                    if selected == "__RUN_ALL__":
+                    if selected == RUN_ALL_SENTINEL:
+                        summaries: list[tuple[str, str]] = []  # (script_name, status_line)
+                        any_bad = False
+                        any_needs_review = False
+
                         for script in selected_scripts:
                             print(f"\n🔁 Running {script.name}...")
-                            run_script(script, working_dir)
-                            print("✅ Done.\n")
+                            rc, status = run_script(script, working_dir)
+
+                            if status:
+                                summaries.append((script.name, status))
+                                if status.startswith("❌"):
+                                    any_bad = True
+                                elif status.startswith("⚠️"):
+                                    any_needs_review = True
+                            else:
+                                fallback = (
+                                    f"⚠️  {script.name} finished — no status one-liner detected "
+                                    "(open its report/output if unsure)"
+                                )
+                                summaries.append((script.name, fallback))
+                                any_needs_review = True
+
+                            if rc != 0:
+                                any_bad = True
+
+                            print("")
+
+                        print("\n— Summary —")
+                        for name, line in summaries:
+                            print(f"- {name}: {line}")
+
+                        if not any_bad and not any_needs_review:
+                            print("\n🎉 All scripts reported clean results.")
+                        elif not any_bad and any_needs_review:
+                            print("\n⚠️  Some checks suggest opening at least one report.")
+                        else:
+                            print("\n❌ One or more scripts failed — see output above.")
+
                         input("\n⏎  Press Enter to return to the script menu...")
                     else:
                         run_script(selected, working_dir)
