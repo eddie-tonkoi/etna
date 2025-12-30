@@ -329,6 +329,35 @@ def run_script(script_path: Path, working_dir: Path) -> Tuple[int, Optional[str]
         return (1, f"❌ {script_path.name} runner error — {e}")
 
 
+# --- Book title helpers ---
+def book_title_for_certificate(book_dir: Path) -> str:
+    """Derive the human-friendly book title for certificates.
+
+    Strict behaviour:
+    - Expect exactly ONE .docx file directly inside `book_dir`.
+    - If there are zero or more than one, raise (hard fail).
+
+    The title is taken from the .docx filename stem (".docx" stripped), with
+    underscores/hyphens turned into spaces and converted to Title Case.
+    """
+    docs = sorted(book_dir.glob("*.docx"), key=lambda p: p.name.lower())
+
+    if not docs:
+        raise FileNotFoundError(
+            f"Expected exactly one .docx in {book_dir}, but found none. "
+            "Place the manuscript .docx directly in the book folder root."
+        )
+
+    if len(docs) > 1:
+        names = ", ".join(p.name for p in docs)
+        raise RuntimeError(
+            f"Expected exactly one .docx in {book_dir}, but found {len(docs)}: {names}"
+        )
+
+    stem = docs[0].stem  # strips .docx
+    cleaned = stem.replace("_", " ").replace("-", " ").strip()
+    return cleaned.title()
+
 # --- Certificate writer helper ---
 def write_correctness_certificate(book_dir: Path, summaries: list[tuple[str, str]]) -> Optional[Path]:
     """Create a PDF certificate in the book's reports folder.
@@ -473,7 +502,7 @@ def write_correctness_certificate(book_dir: Path, summaries: list[tuple[str, str
         checks_max_w = (width - (22 * mm)) - checks_x
 
         # Book title
-        book_title = book_dir.name.replace("_", " ")
+        book_title = book_title_for_certificate(book_dir)
         c.setFillColor(ink)
         c.setFont("Helvetica-Oblique", 14)
         c.drawString(book_x, book_y, truncate(book_title, "Helvetica-Oblique", 14, book_max_w))
@@ -514,7 +543,7 @@ def write_correctness_certificate(book_dir: Path, summaries: list[tuple[str, str
         c.drawCentredString(width / 2, height - 60 * mm, f"ETNA — Eddie Tonkoi's Narrative Analysis")
 
         c.setFont("Helvetica", 12)
-        c.drawCentredString(width / 2, height - 72 * mm, f"Book: {book_dir.name}")
+        c.drawCentredString(width / 2, height - 72 * mm, f"Book: {book_title_for_certificate(book_dir)}")
         c.setFont("Helvetica", 11)
         c.drawCentredString(width / 2, height - 82 * mm, f"Issued: {format_date(now)}")
 
