@@ -16,7 +16,7 @@ It does a few main things:
      typography and style matches.
 
 2. **Loads suppressions to avoid nagging about known exceptions**
-   - Reads suppression lists from `book_grammar.txt` and the global suppression file configured as `paths.grammar_custom_txt` in `scripts/common/config.yaml` (book file optional; global is required).
+   - Reads suppression lists from `grammar_book.txt` and the global suppression file configured as `paths.grammar_custom_txt` in `scripts/common/config.yaml` (book file optional; global is required).
    - Uppercase lines are treated as LanguageTool rule IDs to disable completely.
    - Other lines are treated as phrases: if a match’s context contains one of these, it’s skipped.
    - Optionally, the LanguageTool `ruleIssueType` could be filtered via
@@ -105,7 +105,7 @@ except Exception as e:
     print(f"❌ Failed to load scripts/common/config.yaml (and optional config.local.yaml): {e}")
     sys.exit(1)
 
-BOOK_SUPPRESSIONS = target_path / "book_grammar.txt"
+BOOK_SUPPRESSIONS = target_path / "grammar_book.txt"
 
 if "grammar_custom_txt" not in PATHS:
     print("❌ Missing required config key: paths.grammar_custom_txt")
