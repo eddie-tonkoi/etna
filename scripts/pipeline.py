@@ -119,6 +119,15 @@ STATUS_LINE_RE = re.compile(r"^[✅❌⚠]\uFE0F?\s+")
 # --- Script status icon store ---
 STATUS_STORE_FILENAME = ".etna_script_status.json"
 NOT_RUN_ICON = "⏺"  # not yet run in this book folder
+INFO_ONLY_ICON = "📝"  # ran successfully, but is informational/non-gating
+
+# Scripts that generate useful reports/follow-up artefacts but do NOT “pass/fail” the manuscript.
+# These should not block the correctness certificate.
+INFO_ONLY_SCRIPTS = {
+    "08_ward_audit.py",
+    "10_like_and_crutchwords.py",
+    "11_repetition_patterns.py",
+}
 
 def _status_icon_from_status_line(status_line: Optional[str]) -> str:
     """Normalise the leading icon from a status line to one of ✅ / ⚠️ / ❌.
@@ -138,6 +147,8 @@ def _status_icon_from_status_line(status_line: Optional[str]) -> str:
         return "❌"
     if ch0 == "⚠":
         return "⚠️"
+    if ch0 == "📝":
+        return "📝"
     return "❔"
 
 def _status_store_path(book_dir: Path) -> Path:
@@ -170,10 +181,18 @@ def save_last_status(book_dir: Path, status_map: dict[str, str]) -> None:
         # Never hard-fail the pipeline just because we can't write status.
         pass
 
-def update_last_status(book_dir: Path, script_name: str, status_line: Optional[str]) -> None:
+def update_last_status(book_dir: Path, script_name: str, rc: int, status_line: Optional[str]) -> None:
     """Update and persist status icon for one script in this book folder."""
     status_map = load_last_status(book_dir)
-    status_map[script_name] = _status_icon_from_status_line(status_line)
+
+    if rc != 0:
+        icon = "❌"
+    elif is_info_only_script(script_name):
+        icon = INFO_ONLY_ICON
+    else:
+        icon = _status_icon_from_status_line(status_line)
+
+    status_map[script_name] = icon
     save_last_status(book_dir, status_map)
 
 
@@ -183,6 +202,26 @@ def _extract_status_line(line: str) -> Optional[str]:
     if not s:
         return None
     return s if STATUS_LINE_RE.match(s) else None
+
+
+def is_info_only_script(script_name: str) -> bool:
+    return script_name in INFO_ONLY_SCRIPTS
+
+
+def canonical_status_line(script_path: Path, rc: int, status_line: Optional[str]) -> str:
+    """Return a status line suitable for summaries / storage.
+
+    If a script didn’t emit a recognised ✅/⚠️/❌ one-liner, we synthesise a ⚠️ line
+    so the run is still recorded and visible.
+    """
+    if status_line:
+        return status_line
+    if rc != 0:
+        return f"❌ {script_path.name} failed (exit {rc}) — see output above"
+    return (
+        f"⚠️  {script_path.name} finished — no status one-liner detected "
+        "(open its report/output if unsure)"
+    )
 
 def find_valid_book_folders(books_dir):
     return sorted([
@@ -452,7 +491,8 @@ def write_correctness_certificate(book_dir: Path, summaries: list[tuple[str, str
         for (n, _s) in summaries:
             base = n.rsplit(".", 1)[0]
             base = base.replace("_", " ").strip()
-            items.append(f"{base}: Passed")
+            label = "Report generated" if is_info_only_script(n) else "Passed"
+            items.append(f"{base}: {label}")
 
         if len(items) > max_checks:
             # Fit within the template: reserve the last line for an overflow note.
@@ -608,22 +648,19 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
                         for script in selected_scripts:
                             print(f"\n🔁 Running {script.name}...")
                             rc, status = run_script(script, working_dir)
-                            update_last_status(working_dir, script.name, status)
+                            line = canonical_status_line(script, rc, status)
+                            update_last_status(working_dir, script.name, rc, line)
 
-                            if status:
-                                summaries.append((script.name, status))
-                                if status.startswith("❌"):
+                            summaries.append((script.name, line))
+
+                            # Gate “bad / needs review” only on non-info scripts.
+                            if not is_info_only_script(script.name):
+                                if line.startswith("❌"):
                                     any_bad = True
-                                elif status.startswith("⚠️"):
+                                elif line.startswith("⚠️"):
                                     any_needs_review = True
-                            else:
-                                fallback = (
-                                    f"⚠️  {script.name} finished — no status one-liner detected "
-                                    "(open its report/output if unsure)"
-                                )
-                                summaries.append((script.name, fallback))
-                                any_needs_review = True
 
+                            # Still treat any non-zero exit as a hard failure, even for info-only scripts.
                             if rc != 0:
                                 any_bad = True
 
@@ -634,7 +671,7 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
                             print(f"- {name}: {line}")
 
                         if not any_bad and not any_needs_review:
-                            print("\n🎉 All scripts reported clean results.")
+                            print("\n🎉 All required checks reported clean results.")
 
                             cert = write_correctness_certificate(working_dir, summaries)
                             if cert is not None:
@@ -647,7 +684,8 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
                         input("\n⏎  Press Enter to return to the script menu...")
                     else:
                         rc, status = run_script(selected, working_dir)
-                        update_last_status(working_dir, selected.name, status)
+                        line = canonical_status_line(selected, rc, status)
+                        update_last_status(working_dir, selected.name, rc, line)
                         input("\n⏎  Press Enter to return to the script menu...")
                 else:
                     print("Invalid number.")
