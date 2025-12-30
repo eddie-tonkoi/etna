@@ -486,7 +486,8 @@ def check_grammar(text, tool, disabled_rules, ignored_phrases):
     flagged_offsets = {m.offset for m in matches}
 
     # House-style checks for directional forms (-ward vs -wards)
-    if HOUSE_DIRECTIONS_ENABLED:
+    # Allow disabling via suppression files by adding: HOUSE_DIRECTION
+    if HOUSE_DIRECTIONS_ENABLED and "HOUSE_DIRECTION" not in disabled_rules:
         for wrong, preferred in HOUSE_DIRECTIONS.items():
             for match in re.finditer(rf"\b{re.escape(wrong)}\b", text, flags=re.IGNORECASE):
                 offset = match.start()
@@ -511,7 +512,8 @@ def check_grammar(text, tool, disabled_rules, ignored_phrases):
                 })
 
     # House-style checks for spelling preferences (e.g. realise/realize)
-    if HOUSE_SPELLING_ENABLED:
+    # Allow disabling via suppression files by adding: HOUSE_SPELLING
+    if HOUSE_SPELLING_ENABLED and "HOUSE_SPELLING" not in disabled_rules:
         for wrong, preferred in HOUSE_SPELLING.items():
             for match in re.finditer(rf"\b{re.escape(wrong)}\b", text, flags=re.IGNORECASE):
                 offset = match.start()
