@@ -281,7 +281,7 @@ print(f"📦 Total unique lexicon entries (after merge): {len(LOCAL_LEXICON):,}\
 
 occurrences, counts = collect_capitalised_tokens()
 if not occurrences:
-    print("No capitalised tokens found.")
+    print("✅ No capitalised tokens found.")
     raise SystemExit(0)
 
 all_lower_tokens = {entry["token_lower"] for entry in occurrences}
