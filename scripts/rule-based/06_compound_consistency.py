@@ -71,6 +71,14 @@ parser.add_argument(
     default=None,
     help="Compound style config file. If omitted, uses paths.compound_style_txt from scripts/common/config.yaml.",
 )
+parser.add_argument(
+    "--whitelist-file",
+    default=None,
+    help=(
+        "Optional whitelist file of preferred compounds to ignore (one per line). "
+        "If omitted, the script looks for 'coumpound_whitelist.txt' in the project root (next to the reports directory)."
+    ),
+)
 args = parser.parse_args()
 
 base_path = Path(args.path)
@@ -78,6 +86,19 @@ chapters_dir = base_path / args.chapters_dir
 reports_dir = base_path / args.reports_dir
 report_path = reports_dir / "r_06_compound_consistency.md"
 reports_dir.mkdir(parents=True, exist_ok=True)
+
+# Resolve whitelist file:
+# - If --whitelist-file is provided, accept absolute or relative paths.
+#   For relative paths, try relative-to-project first, then relative-to-repo.
+# - If omitted, default to project root (next to the reports directory).
+if args.whitelist_file:
+    candidate = Path(args.whitelist_file)
+    candidates = [candidate]
+    if not candidate.is_absolute():
+        candidates = [base_path / candidate, REPO_ROOT / candidate]
+    whitelist_path = next((p for p in candidates if p.exists()), candidates[0])
+else:
+    whitelist_path = base_path / "coumpound_whitelist.txt"
 
 # Resolve style file:
 # - If --style-file is provided, accept absolute or relative paths.
@@ -100,6 +121,30 @@ if not style_path.exists():
     else:
         print("Check paths.compound_style_txt in etna/scripts/common/config.yaml.")
     sys.exit(1)
+
+
+# ——— Load optional whitelist ———
+
+def parse_whitelist_file(path: Path) -> set[str]:
+    """Parse a whitelist file containing one preferred compound per line.
+
+    Blank lines and comments beginning with # are ignored. Matching is case-insensitive.
+    """
+    items: set[str] = set()
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            items.add(stripped.lower())
+    except FileNotFoundError:
+        return set()
+    return items
+
+whitelist: set[str] = set()
+ignored_families: list[str] = []
+if whitelist_path.exists():
+    whitelist = parse_whitelist_file(whitelist_path)
 
 
 # ——— Load style config ———
@@ -148,8 +193,16 @@ def parse_style_file(path: Path):
 
 style_families = parse_style_file(style_path)
 
+# Apply whitelist: remove any families whose preferred form appears in the whitelist
+if whitelist:
+    ignored_families = sorted([k for k in style_families.keys() if k in whitelist])
+    for k in ignored_families:
+        style_families.pop(k, None)
+
 if not style_families:
     print(f"❌ No style families configured in: {style_path}")
+    if whitelist_path.exists() and whitelist:
+        print(f"Note: {len(whitelist)} whitelist entr(y/ies) loaded from {whitelist_path}, which may have filtered everything out.")
     print("Add entries of the form: preferred <= alt1, alt2, alt3")
     sys.exit(1)
 
@@ -213,8 +266,13 @@ timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 with report_path.open("w", encoding="utf-8") as out:
     out.write("# 🧾 Compound / Hyphenation Style Report\n\n")
     out.write(f"_Generated: {timestamp}_\n\n")
+    out.write(f"Style file: `{style_path}`\n")
+    if whitelist_path.exists() and whitelist:
+        out.write(f"Whitelist file: `{whitelist_path}` — ignoring {len(ignored_families)} configured famil(ies).\n")
+        if ignored_families:
+            out.write("Ignored families (preferred forms): " + ", ".join(f"`{k}`" for k in ignored_families) + "\n")
+    out.write("\n")
     out.write(
-        f"Style file: `{style_path}`\n\n"
         "Each family shows the preferred form and any alternative forms that\n"
         "actually appear in the text.\n\n"
     )
