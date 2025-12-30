@@ -178,6 +178,14 @@ def run_checks(text, custom_entries):
     last_para_line = None
     para_word_count = 0
 
+    # Track whether we're currently inside an open smart double-quote span across paragraphs.
+    # This lets us avoid false positives on continued dialogue, and spot missing opening quotes
+    # on the next paragraph when the same speaker continues.
+    inside_double_quote = False
+
+    # True when the next non-empty (non-accepted) line begins a new paragraph.
+    paragraph_start = True
+
     for line_no, line in enumerate(lines, 1):
         stripped = line.strip()
 
@@ -192,6 +200,7 @@ def run_checks(text, custom_entries):
             last_para_line_no = None
             last_para_line = None
             para_word_count = 0
+            paragraph_start = True
             continue
 
         # Treat accepted structural lines as boundaries and skip checks.
@@ -205,12 +214,26 @@ def run_checks(text, custom_entries):
             last_para_line_no = None
             last_para_line = None
             para_word_count = 0
+            # Structural separators should not carry dialogue state across them.
+            inside_double_quote = False
+            paragraph_start = True
             continue
 
         # Track the last non-empty line in the current paragraph.
         last_para_line_no = line_no
         last_para_line = line
         para_word_count += len(word_token.findall(stripped))
+
+        # If the previous paragraph left a smart double quote open, and we have started a new
+        # paragraph, convention expects a new opening quote at the start of this paragraph.
+        if paragraph_start and inside_double_quote:
+            if not QUOTE_START.match(line):
+                issues.append((
+                    "Possible missing opening quote for continued dialogue (previous paragraph left dialogue open)",
+                    line_no,
+                    line,
+                ))
+        paragraph_start = False
 
         if double_space.search(line):
             issues.append(("Double space", line_no, line))
@@ -353,28 +376,63 @@ def run_checks(text, custom_entries):
                 line
             ))
 
-        single_quotes = 0
-        double_quotes = 0
+        # --- Quote checking (smarter handling for dialogue continuation + apostrophes) ---
+
+        # Smart single quotes: only count as quotation marks when a matching opener has been seen.
+        # This avoids treating apostrophes like in must’ve / throwin’ / eleven-ish as quotes.
+        inside_smart_single = False
         for idx, ch in enumerate(line):
-            if ch == "’":
-                # Treat as apostrophe (not a quote) when it clearly starts or sits inside a word/number,
-                # e.g. don't, 'em, '80s, hangin', etc.
-                if idx < len(line) - 1 and line[idx + 1].isalnum():
+            if ch == "‘":
+                inside_smart_single = True
+            elif ch == "’":
+                if inside_smart_single:
+                    inside_smart_single = False
+                else:
+                    # Apostrophe (don’t count as a quote mark)
                     continue
-                single_quotes += 1
-            elif ch == "‘":
-                single_quotes += 1
-            elif ch in ("“", "”"):
-                double_quotes += 1
 
-        if single_quotes % 2 != 0:
-            issues.append(("Unmatched smart single quotes (odd number on line)", line_no, line))
-        if double_quotes % 2 != 0:
-            issues.append(("Unmatched smart double quotes (odd number on line)", line_no, line))
+        # Warn if a smart single-quote opener was never closed on this line.
+        # (If this was actually the apostrophe-misuse case like ‘Twas / ‘Cause, the dedicated
+        #  rule above will catch it; we avoid duplicating noise here.)
+        if inside_smart_single and not bad_contraction_regex.search(line):
+            issues.append(("Unmatched smart single quote (opening ‘ without closing ’ on line)", line_no, line))
 
-        straight_quotes = line.count('"') + line.count("'")
-        if straight_quotes % 2 != 0:
-            issues.append(("Unmatched straight quotes (odd number on line)", line_no, line))
+        # Smart double quotes: track state across paragraphs so continued dialogue doesn’t
+        # create false positives, and so missing opening quotes on the *next* paragraph can be detected.
+        for ch in line:
+            if ch == "“":
+                inside_double_quote = True
+            elif ch == "”":
+                if not inside_double_quote:
+                    issues.append(("Closing smart double quote without matching opening quote", line_no, line))
+                else:
+                    inside_double_quote = False
+
+        # Straight quotes: basic sanity check, but ignore apostrophes inside/at the end of words.
+        if line.count('"') % 2 != 0:
+            issues.append(("Unmatched straight double quotes (odd number on line)", line_no, line))
+
+        inside_straight_single = False
+        straight_single_marks = 0
+        for idx, ch in enumerate(line):
+            if ch != "'":
+                continue
+            prev_char = line[idx - 1] if idx > 0 else ""
+            next_char = line[idx + 1] if idx + 1 < len(line) else ""
+
+            # Treat as apostrophe if it sits within a word/number or directly after one.
+            # Examples: don't, must've, throwin', '80s
+            if prev_char.isalnum() and (next_char.isalnum() or next_char == "" or next_char.isspace() or next_char in ".,;:!?)]}\"”—–-"):
+                continue
+            if next_char.isalnum() and (prev_char == "" or prev_char.isspace() or prev_char in "([{-\"“”‘’"):
+                # Leading apostrophe like '80s
+                continue
+
+            inside_straight_single = not inside_straight_single
+            straight_single_marks += 1
+
+        if straight_single_marks % 2 != 0:
+            issues.append(("Unmatched straight single quotes (odd number on line)", line_no, line))
 
     # End-of-file paragraph check (in case the file doesn't end with a blank line).
     if last_para_line is not None and para_word_count >= 10:
@@ -383,6 +441,10 @@ def run_checks(text, custom_entries):
             candidate = strip_trailing_closers(last_para_line.strip())
             if candidate and not terminal_punct.search(candidate):
                 issues.append(("Paragraph ends without terminal punctuation", last_para_line_no, last_para_line))
+    if inside_double_quote:
+        # We reached EOF still inside a smart double-quoted span.
+        # This is usually an actual missing closing quote (or a quote opened very late in the file).
+        issues.append(("File ends with an unclosed smart double quote", last_para_line_no or 1, last_para_line or ""))
     return issues
 
 def main():
