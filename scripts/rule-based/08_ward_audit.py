@@ -327,7 +327,7 @@ def main():
     chunk_dir = target_path / "chapters"
     if not chunk_dir.exists():
         print(f"❌ No chunks found in {chunk_dir}.")
-        return
+        sys.exit(1)
 
     tool = language_tool_python.LanguageTool('en-GB', remote_server=LT_URL)
 
@@ -478,10 +478,11 @@ def main():
     print(f"Report written to {REPORT}")
 
     if total_paras == 0:
-        print("✅ No advisory -ward/-wards cases detected")
+        print("📝 Ward audit report generated — no advisory -ward/-wards cases detected")
     else:
         print(
-            f"⚠️  Found {total_paras} paragraph(s) flagged ({flagged_tokens} token(s), {len(unique_rules)} rule(s))"
+            f"📝 Ward audit report generated — {total_paras} paragraph(s) flagged "
+            f"({flagged_tokens} token(s), {len(unique_rules)} rule(s))"
         )
 
 
