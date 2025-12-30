@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
@@ -227,6 +228,227 @@ def run_script(script_path: Path, working_dir: Path) -> Tuple[int, Optional[str]
         print(f"❌ Script runner error: {e}")
         return (1, f"❌ {script_path.name} runner error — {e}")
 
+
+# --- Certificate writer helper ---
+def write_correctness_certificate(book_dir: Path, summaries: list[tuple[str, str]]) -> Optional[Path]:
+    """Create a PDF certificate in the book's reports folder.
+
+    If a background design image is available, render it and overlay the dynamic text.
+    Otherwise, fall back to a simple, clean certificate.
+
+    Assets (in priority order):
+      - Environment variables:
+          ETNA_CERT_BG  (path to background image, e.g. PNG)
+      - Repo assets folder:
+          etna/assets/certificate_bg.png
+
+    Only call this when everything has passed.
+    """
+
+    reports_dir = book_dir / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = reports_dir / f"certificate_correctness_{book_dir.name}_{ts}.pdf"
+
+    try:
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.units import mm
+        from reportlab.lib import colors
+        from reportlab.lib.utils import ImageReader
+        from reportlab.pdfgen import canvas
+        from reportlab.pdfbase import pdfmetrics
+    except Exception as e:
+        print(f"⚠️  Could not generate certificate PDF (missing ReportLab?): {e}")
+        return None
+
+    # Resolve optional assets.
+    scripts_dir = Path(__file__).resolve().parent
+    repo_root = scripts_dir.parent  # .../etna
+    assets_dir = repo_root / "assets"
+
+    bg_env = os.environ.get("ETNA_CERT_BG")
+    bg_path = Path(bg_env).expanduser() if bg_env else (assets_dir / "certificate_bg.png")
+
+    use_bg = bg_path.exists() and bg_path.is_file()
+
+    pagesize = landscape(A4) if use_bg else A4
+    c = canvas.Canvas(str(out_path), pagesize=pagesize)
+    width, height = pagesize
+
+    # ---- Background first (if present) ----
+    if use_bg:
+        try:
+            c.drawImage(
+                ImageReader(str(bg_path)),
+                0,
+                0,
+                width,
+                height,
+                preserveAspectRatio=True,
+                anchor="c",
+            )
+        except Exception:
+            # If background fails to draw, fall back to plain.
+            use_bg = False
+
+    # ---- Fallback border (only when no background) ----
+    margin = 18 * mm
+    if not use_bg:
+        c.setStrokeColor(colors.black)
+        c.setLineWidth(1)
+        c.rect(margin, margin, width - 2 * margin, height - 2 * margin)
+
+
+    # ---- Text overlay ----
+    # When using the landscape certificate template background, place text into the pre-drawn fields.
+    # Co-ordinates below are tuned for `assets/certificate_bg.png` (landscape A4).
+
+    ink = colors.HexColor("#2f3b45")
+
+    def truncate(text: str, font: str, size: int, max_width_pts: float) -> str:
+        if pdfmetrics.stringWidth(text, font, size) <= max_width_pts:
+            return text
+        ell = "…"
+        lo, hi = 0, len(text)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            cand = text[:mid].rstrip() + ell
+            if pdfmetrics.stringWidth(cand, font, size) <= max_width_pts:
+                lo = mid + 1
+            else:
+                hi = mid
+        return text[: max(0, lo - 1)].rstrip() + ell
+
+    def format_date(dt: datetime) -> str:
+        # Stable English month names (avoids locale surprises).
+        months = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ]
+        return f"{dt.day:02d} {months[dt.month - 1]} {dt.year}"
+
+    now = datetime.now()
+
+    if use_bg:
+        # Template field positions (mm from bottom-left).
+        # Tuned for the final `assets/certificate_bg.png` which already includes
+        # the heading/logo/seal. Adjust these *_MM values to fine-tune alignment.
+
+        BOOK_X_MM = 44.0
+        BOOK_Y_MM = 138.0
+
+        DATE_X_MM = 44.0
+        DATE_Y_MM = 111.0
+
+        # Checks list: start just to the right of the bullet dots.
+        CHECKS_X_MM = 166.0
+        CHECKS_Y0_MM = 131
+        CHECKS_STEP_MM = 6.6
+        MAX_CHECKS = 12
+
+        book_x = BOOK_X_MM * mm
+        book_y = BOOK_Y_MM * mm
+        date_x = DATE_X_MM * mm
+        date_y = DATE_Y_MM * mm
+
+        checks_x = CHECKS_X_MM * mm
+        checks_y0 = CHECKS_Y0_MM * mm
+        checks_step = CHECKS_STEP_MM * mm
+        max_checks = MAX_CHECKS
+
+        # Maximum widths (points)
+        book_max_w = 120 * mm
+        date_max_w = 90 * mm
+        checks_max_w = (width - (22 * mm)) - checks_x
+
+        # Book title
+        book_title = book_dir.name.replace("_", " ")
+        c.setFillColor(ink)
+        c.setFont("Helvetica-Oblique", 14)
+        c.drawString(book_x, book_y, truncate(book_title, "Helvetica-Oblique", 14, book_max_w))
+
+        # Date
+        c.setFont("Helvetica", 11)
+        c.drawString(date_x, date_y, truncate(format_date(now), "Helvetica", 11, date_max_w))
+
+        # Checks list
+        c.setFont("Helvetica", 10)
+        y = checks_y0
+
+        # Prefer cleaner names in the checklist.
+        items = []
+        for (n, _s) in summaries:
+            base = n.rsplit(".", 1)[0]
+            base = base.replace("_", " ").strip()
+            items.append(f"{base}: Passed")
+
+        if len(items) > max_checks:
+            # Fit within the template: reserve the last line for an overflow note.
+            overflow = len(items) - (max_checks - 1)
+            items = items[: max_checks - 1] + [f"…and {overflow} more"]
+
+        for item in items:
+            c.drawString(checks_x, y, truncate(item, "Helvetica", 10, checks_max_w))
+            y -= checks_step
+
+    else:
+        # Plain fallback (portrait A4): keep the older simple certificate layout.
+        # Title
+        c.setFillColor(colors.black)
+        c.setFont("Helvetica-Bold", 28)
+        c.drawCentredString(width / 2, height - 45 * mm, "Certificate of Correctness")
+
+        c.setFont("Helvetica", 12)
+        c.drawCentredString(width / 2, height - 60 * mm, f"ETNA — Eddie Tonkoi's Narrative Analysis")
+
+        c.setFont("Helvetica", 12)
+        c.drawCentredString(width / 2, height - 72 * mm, f"Book: {book_dir.name}")
+        c.setFont("Helvetica", 11)
+        c.drawCentredString(width / 2, height - 82 * mm, f"Issued: {format_date(now)}")
+
+        c.setFont("Helvetica", 12)
+        c.drawCentredString(width / 2, height - 98 * mm, "All automated checks completed with clean results.")
+
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(margin + 10 * mm, height - 120 * mm, "Checks passed:")
+
+        c.setFont("Helvetica", 10)
+        y = height - 130 * mm
+        line_h = 5.5 * mm
+        max_w = width - (2 * margin) - (10 * mm)
+
+        for name, status in summaries:
+            text = f"{status}  {name}"
+            text = truncate(text, "Helvetica", 10, max_w)
+            c.drawString(margin + 12 * mm, y, text)
+            y -= line_h
+            if y < margin + 25 * mm:
+                c.showPage()
+                c.setFont("Helvetica", 10)
+                y = height - margin - 15 * mm
+
+        # Small “PASS” seal
+        c.setStrokeColor(colors.darkgreen)
+        c.setLineWidth(2)
+        c.circle(width - margin - 18 * mm, margin + 22 * mm, 14 * mm, stroke=1, fill=0)
+        c.setFont("Helvetica-Bold", 12)
+        c.setFillColor(colors.darkgreen)
+        c.drawCentredString(width - margin - 18 * mm, margin + 20 * mm, "PASS")
+
+    c.save()
+    return out_path
+
 def show_help(script_path):
     print(f"\n=== Help for {script_path.name} ===")
     try:
@@ -349,6 +571,10 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
 
                         if not any_bad and not any_needs_review:
                             print("\n🎉 All scripts reported clean results.")
+
+                            cert = write_correctness_certificate(working_dir, summaries)
+                            if cert is not None:
+                                print(f"📜 Certificate written to {cert}")
                         elif not any_bad and any_needs_review:
                             print("\n⚠️  Some checks suggest opening at least one report.")
                         else:
