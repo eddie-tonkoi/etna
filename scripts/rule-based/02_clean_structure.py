@@ -100,7 +100,7 @@ QUOTE_START = re.compile(r'^\s*[“"\'‘]')
 editing_tags = re.compile(r"\[\[|<<|NOTE:")
 split_year = re.compile(r"\b(19|20)\s{1,2}[0-9]{2}\b")
 hyphen_spacing = re.compile(r"\b\w+\s+-\s+\w+\b")
-hyphenated_word = re.compile(r"\b\w+-\w+\b")
+#hyphenated_word = re.compile(r"\b\w+-\w+\b")
 emdash_spacing = re.compile(r"\s—\s|\s—|—\s")
 
 endash_range = re.compile(r"\b[0-9A-Za-z]+\s*–\s*[0-9A-Za-z]+\b")
@@ -249,11 +249,11 @@ def run_checks(text, custom_entries):
             issues.append(("Hyphen should not be spaced (use 'word-word', not 'word - word')", line_no, line))
 
         # Hyphenated words (no spaces) — surface for manual review unless explicitly whitelisted in dictionaries.
-        for match in hyphenated_word.finditer(line):
-            hyph_word = match.group(0)
-            if hyph_word.lower() not in custom_entries:
-                issues.append(("Hyphenated word (review for clause break or style)", line_no, line))
-                break
+        # for match in hyphenated_word.finditer(line):
+        #     hyph_word = match.group(0)
+        #     if hyph_word.lower() not in custom_entries:
+        #         issues.append(("Hyphenated word (review for clause break or style)", line_no, line))
+        #         break
 
         # En dash checks: discourage en dashes as clause breaks; prefer em dashes instead.
         for match in endash_break.finditer(line):
