@@ -95,7 +95,6 @@ backdrop <= back-drop, back drop
 mindset <= mind-set, mind set
 breakdown <= break-down, break down
 breakthrough <= break-through, break through
-setup <= set-up, set up
 follow-up <= followup, follow up
 cleanup <= clean-up, clean up
 
