@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import sys
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple, Union
@@ -114,6 +115,66 @@ def clear_terminal():
 # Match ✅ / ❌ / ⚠ with an optional U+FE0F so we reliably detect status lines.
 RUN_ALL_SENTINEL = "__RUN_ALL__"
 STATUS_LINE_RE = re.compile(r"^[✅❌⚠]\uFE0F?\s+")
+
+# --- Script status icon store ---
+STATUS_STORE_FILENAME = ".etna_script_status.json"
+NOT_RUN_ICON = "⏺"  # not yet run in this book folder
+
+def _status_icon_from_status_line(status_line: Optional[str]) -> str:
+    """Normalise the leading icon from a status line to one of ✅ / ⚠️ / ❌.
+
+    The ⚠️ icon may appear as '⚠' + optional U+FE0F; we normalise to '⚠️'.
+    """
+    if not status_line:
+        return NOT_RUN_ICON
+    s = status_line.strip()
+    if not s:
+        return NOT_RUN_ICON
+
+    ch0 = s[0]
+    if ch0 == "✅":
+        return "✅"
+    if ch0 == "❌":
+        return "❌"
+    if ch0 == "⚠":
+        return "⚠️"
+    return "❔"
+
+def _status_store_path(book_dir: Path) -> Path:
+    return book_dir / STATUS_STORE_FILENAME
+
+def load_last_status(book_dir: Path) -> dict[str, str]:
+    """Load last-run status icons per script for a given book folder."""
+    p = _status_store_path(book_dir)
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            # Ensure values are strings.
+            return {str(k): str(v) for k, v in data.items()}
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        # Corrupt/invalid file: ignore rather than breaking the pipeline.
+        return {}
+    return {}
+
+def save_last_status(book_dir: Path, status_map: dict[str, str]) -> None:
+    """Persist last-run status icons per script for a given book folder."""
+    p = _status_store_path(book_dir)
+    try:
+        p.write_text(
+            json.dumps(status_map, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except Exception:
+        # Never hard-fail the pipeline just because we can't write status.
+        pass
+
+def update_last_status(book_dir: Path, script_name: str, status_line: Optional[str]) -> None:
+    """Update and persist status icon for one script in this book folder."""
+    status_map = load_last_status(book_dir)
+    status_map[script_name] = _status_icon_from_status_line(status_line)
+    save_last_status(book_dir, status_map)
 
 
 def _extract_status_line(line: str) -> Optional[str]:
@@ -472,6 +533,7 @@ def collect_script_groups(scripts_dir: Path) -> dict:
 def script_menu(working_dir: Path, scripts_dir: Path, method=None):
     while True:
         clear_terminal()
+        last_status = load_last_status(working_dir)
         script_groups = collect_script_groups(scripts_dir)
         emoji_map = {
             "Scripts": "🧰",
@@ -498,7 +560,8 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
             if not method:
                 print(f"\n{emoji} {group}")
             for script in group_scripts:
-                print(f"{i}. {script.name}")
+                icon = last_status.get(script.name, NOT_RUN_ICON)
+                print(f"{i}. {icon} {script.name}")
                 script_indices[i] = script
                 selected_scripts.append(script)
                 i += 1
@@ -545,6 +608,7 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
                         for script in selected_scripts:
                             print(f"\n🔁 Running {script.name}...")
                             rc, status = run_script(script, working_dir)
+                            update_last_status(working_dir, script.name, status)
 
                             if status:
                                 summaries.append((script.name, status))
@@ -582,7 +646,8 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
 
                         input("\n⏎  Press Enter to return to the script menu...")
                     else:
-                        run_script(selected, working_dir)
+                        rc, status = run_script(selected, working_dir)
+                        update_last_status(working_dir, selected.name, status)
                         input("\n⏎  Press Enter to return to the script menu...")
                 else:
                     print("Invalid number.")
