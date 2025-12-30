@@ -72,9 +72,11 @@ parser.add_argument(
     "--whitelist-file",
     default=None,
     help=(
-        "Whitelist file to skip known repeated phrases. If omitted, uses paths.duplicate_whitelist_txt "
-        "from scripts/common/config.yaml. You may pass an absolute path, or a path relative to the project folder "
-        "or repo root."
+        "Whitelist file to skip known repeated phrases. Precedence: "
+        "(1) --whitelist-file if provided; "
+        "(2) book-local 'duplicate_whitelist.txt' in the project folder (next to reports/) if it exists; "
+        "(3) otherwise uses paths.duplicate_whitelist_txt from scripts/common/config.yaml. "
+        "You may pass an absolute path, or a path relative to the project folder or repo root."
     ),
 )
 args = parser.parse_args()
@@ -107,6 +109,7 @@ if "duplicate_whitelist_txt" not in PATHS:
     sys.exit(1)
 
 DEFAULT_WHITELIST_PATH = REPO_ROOT / PATHS["duplicate_whitelist_txt"]
+LOCAL_WHITELIST_PATH = base_path / "duplicate_whitelist.txt"
 
 chunk_dir = base_path / "chapters"
 if not chunk_dir.exists():
@@ -130,16 +133,18 @@ def load_whitelist(path: Path) -> set[str]:
         if args.whitelist_file:
             print("Checked project-relative and repo-relative locations.")
         else:
-            print("Check paths.duplicate_whitelist_txt in etna/scripts/common/config.yaml.")
+            print("Checked for book-local duplicate_whitelist.txt and then paths.duplicate_whitelist_txt in etna/scripts/common/config.yaml.")
         sys.exit(1)
 
     with open(path, encoding="utf-8") as f:
         return {line.strip() for line in f if line.strip()}
 
 # Resolve whitelist file:
-# - If --whitelist-file is provided, accept absolute or relative paths.
-#   For relative paths, try relative-to-project first, then relative-to-repo.
-# - If omitted, use the config default (repo-relative).
+# Precedence:
+# 1) If --whitelist-file is provided, accept absolute or relative paths.
+#    For relative paths, try relative-to-project first, then relative-to-repo.
+# 2) If omitted, prefer a book-local file: base_path/duplicate_whitelist.txt (next to reports/).
+# 3) Otherwise fall back to the config default (repo-relative).
 if args.whitelist_file:
     candidate = Path(args.whitelist_file)
     candidates = [candidate]
@@ -148,7 +153,10 @@ if args.whitelist_file:
 
     whitelist_path = next((p for p in candidates if p.exists()), candidates[0])
 else:
-    whitelist_path = DEFAULT_WHITELIST_PATH
+    if LOCAL_WHITELIST_PATH.exists():
+        whitelist_path = LOCAL_WHITELIST_PATH
+    else:
+        whitelist_path = DEFAULT_WHITELIST_PATH
 
 whitelist = load_whitelist(whitelist_path)
 print(f"📘 Loaded {len(whitelist)} whitelist phrases from {whitelist_path}")
@@ -272,11 +280,11 @@ with open(report_path, "w", encoding="utf-8") as f:
 
         f.write("\n\n**Phrase 1:**\n")
         f.write("```text\n")
-        f.write(p1.strip()[:200] + "\n")
+        f.write(p1 + "\n")
         f.write("```\n\n")
         f.write("**Phrase 2:**\n")
         f.write("```text\n")
-        f.write(p2.strip()[:200] + "\n")
+        f.write(p2 + "\n")
         f.write("```\n\n")
 
 
