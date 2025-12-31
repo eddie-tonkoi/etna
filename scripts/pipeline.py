@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import json
 from datetime import datetime
 from pathlib import Path
@@ -107,6 +108,13 @@ def get_books_root_from_config() -> Path:
 
 def clear_terminal():
     os.system("clear" if os.name == "posix" else "cls")
+
+
+def _format_duration_mmss(seconds: float) -> str:
+    """Format a duration as M:SS."""
+    total = int(round(max(0.0, seconds)))
+    m, s = divmod(total, 60)
+    return f"{m}:{s:02d}"
 
 
 # A “status one-liner” is the final summary line each script prints.
@@ -673,6 +681,7 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
                         summaries: list[tuple[str, str]] = []  # (script_name, status_line)
                         any_bad = False
                         any_needs_review = False
+                        t0 = time.monotonic()
 
                         for script in selected_scripts:
                             print(f"\n🔁 Running {script.name}...")
@@ -695,6 +704,8 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
 
                             print("")
 
+                        elapsed = time.monotonic() - t0
+                        print(f"\n⏱️  Completed all scripts in {_format_duration_mmss(elapsed)}")
                         print("\n— Summary —")
                         for name, line in summaries:
                             print(f"- {name}: {line}")
