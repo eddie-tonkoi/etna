@@ -2,3 +2,21 @@ scripts/common/config.local.yaml
 # Python cache
 __pycache__/
 *.py[cod]
+
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# OS / editor temp files
+*~
+*.swp
+*.swo
+
+# Virtual environments
+.venv/
+venv/
+env/
