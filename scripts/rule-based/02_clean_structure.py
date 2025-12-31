@@ -30,6 +30,7 @@ import re
 from datetime import datetime
 from collections import Counter
 import sys
+import unicodedata
 
 # Allow importing shared config loader from scripts/common/common.py
 sys.path.append(str(Path(__file__).resolve().parents[1] / "common"))
@@ -94,7 +95,27 @@ multi_punct = re.compile(
 line_end_comma = re.compile(r'.+,\s*$')
 terminal_punct = re.compile(r"[.!?…,:;—–-]$")
 word_token = re.compile(r"[A-Za-z0-9]+(?:[’'][A-Za-z0-9]+)?")
-QUOTE_START = re.compile(r'^\s*[“"\'‘]')
+
+# Some files can contain invisible Unicode *format* characters (Unicode category Cf) at the start
+# of lines (e.g. BOM, zero-width spaces, bidi marks). These can break "starts with quote" heuristics.
+# We strip leading whitespace + leading Cf chars before doing prefix checks.
+
+def strip_leading_noise(s: str) -> str:
+    """Strip leading whitespace and Unicode format chars (category Cf)."""
+    i = 0
+    while i < len(s) and (s[i].isspace() or unicodedata.category(s[i]) == "Cf"):
+        i += 1
+    return s[i:]
+
+
+def starts_with_quote(s: str) -> bool:
+    s = strip_leading_noise(s)
+    return s.startswith(("“", '"', "‘", "'"))
+
+
+def starts_with_conjunction(s: str) -> bool:
+    s = strip_leading_noise(s)
+    return re.match(r"^(?:and|but|so|or|then|yet)\b", s, re.IGNORECASE) is not None
 
 #scene_breaks = re.compile(r"^([-–—\*#~_]{3,})$")
 editing_tags = re.compile(r"\[\[|<<|NOTE:")
@@ -227,7 +248,7 @@ def run_checks(text, custom_entries):
         # If the previous paragraph left a smart double quote open, and we have started a new
         # paragraph, convention expects a new opening quote at the start of this paragraph.
         if paragraph_start and inside_double_quote:
-            if not QUOTE_START.match(line):
+            if not starts_with_quote(line):
                 issues.append((
                     "Possible missing opening quote for continued dialogue (previous paragraph left dialogue open)",
                     line_no,
@@ -254,13 +275,25 @@ def run_checks(text, custom_entries):
             break
 
         if line_end_comma.match(line):
-            if line_no < len(lines):
-                next_line = lines[line_no]
-            else:
-                next_line = ""
+            # Look ahead to the next meaningful line (skip blanks and accepted structural lines).
+            lookahead = ""
+            idx = line_no  # `line_no` is 1-based; `lines` is 0-based.
+            while idx < len(lines):
+                candidate = lines[idx]
+                cand_stripped = candidate.strip()
+                if not cand_stripped:
+                    idx += 1
+                    continue
+                if cand_stripped in accepted_lines:
+                    idx += 1
+                    continue
+                lookahead = candidate
+                break
 
-            # Accept if next line starts with a quote or conjunction
-            if not QUOTE_START.match(next_line) and not re.match(r'^\s*(?:and|but|so|or|then|yet)\b', next_line, re.IGNORECASE):
+            # Accept if the next meaningful line starts with a quote or conjunction
+            if lookahead and (starts_with_quote(lookahead) or starts_with_conjunction(lookahead)):
+                pass
+            else:
                 issues.append(("Line ends in comma (suspicious dialogue/action tag?)", line_no, line))
         if editing_tags.search(line):
             issues.append(("Editing marker (e.g. [[, <<, NOTE:)", line_no, line))
@@ -314,11 +347,22 @@ def run_checks(text, custom_entries):
                 prev_char = line[pos - 1] if pos > 0 else ""
                 next_char = line[pos + 1] if pos + 1 < len(line) else ""
 
-                # Case: line/paragraph starts with ellipsis (only whitespace and possibly opening quotes before)
+                # Case A: line/paragraph starts with ellipsis (only whitespace and possibly opening quotes before)
                 before_stripped = before.strip()
-                # Treat as start-of-line if there is nothing but optional opening quotes before the ellipsis.
-                if before_stripped == "" or before_stripped.strip('“”"\'‘’') == "":
-                    # Disallow '… word' or '“… word' (ellipsis then space then word)
+                is_true_line_start = (before_stripped == "" or before_stripped.strip('“”"\'‘’') == "")
+
+                # Case B: ellipsis begins a quoted utterance *within* a line, e.g. ' “…not under arrest.”'
+                # Treat this like a line-start ellipsis when the ellipsis is immediately preceded by an opening quote
+                # and that quote is itself preceded by a boundary (start/whitespace/punctuation/paren).
+                before_rstrip = before.rstrip()
+                is_quoted_utterance_start = False
+                if before_rstrip.endswith(("“", '"', "‘", "'")):
+                    prev = before_rstrip[:-1].rstrip()
+                    if prev == "" or prev[-1] in ".!?…, :;—–-([{".replace(" ", ""):
+                        is_quoted_utterance_start = True
+
+                if is_true_line_start or is_quoted_utterance_start:
+                    # Disallow '… word' / '“… word' (ellipsis then space then word)
                     if next_char == " ":
                         issues.append(("Ellipsis at line start should be '…word' (or '\"…word') with no space after", line_no, line))
                         break
@@ -344,10 +388,15 @@ def run_checks(text, custom_entries):
                     continue
 
                 if next_char == ",":
-                    # Allow 'word…, word' pattern (comma + space).
+                    # Allow 'word…, word' (comma + space)
                     if len(after) >= 2 and after[1] == " ":
                         continue
-                    # Comma not followed by space is suspicious.
+
+                    # Also allow 'word…,” word' / "word…,' word" etc. (comma + closing quote + space)
+                    if len(after) >= 3 and after[1] in ("”", "’", '"', "'") and after[2] == " ":
+                        continue
+
+                    # Otherwise, comma not followed by space is suspicious.
                     issues.append(("Comma after ellipsis should usually be followed by a space (use 'word…, word')", line_no, line))
                     break
 
