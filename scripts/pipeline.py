@@ -651,7 +651,9 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
             input("\n⏎  Press Enter to return to the script-folder menu...")
             return "back"
 
-        choice = input(f"\nChoose script to run in 📂 {working_dir.name} (0 = all): ").strip()
+        choice = input(
+            f"\nChoose script to run in 📂 {working_dir.name} (0 = all; -N = run 1..N): "
+        ).strip()
 
         if choice.lower() == 'q':
             sys.exit(0)
@@ -673,6 +675,60 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
         else:
             try:
                 index = int(choice)
+
+                # Negative selection: run scripts 1..N (inclusive). No certificate for subsets.
+                if index < 0:
+                    upto = -index
+                    if upto < 1 or upto > len(selected_scripts):
+                        print("Invalid number.")
+                        input("\n⏎  Press Enter to return to the script menu...")
+                        continue
+
+                    clear_terminal()
+                    scripts_to_run = selected_scripts[:upto]
+
+                    summaries: list[tuple[str, str]] = []  # (script_name, status_line)
+                    any_bad = False
+                    any_needs_review = False
+                    t0 = time.monotonic()
+
+                    for script in scripts_to_run:
+                        print(f"\n🔁 Running {script.name}...")
+                        rc, status = run_script(script, working_dir)
+                        line = canonical_status_line(script, rc, status)
+                        update_last_status(working_dir, script.name, rc, line)
+
+                        summaries.append((script.name, line))
+
+                        # Gate “bad / needs review” only on non-info scripts.
+                        if not is_info_only_script(script.name):
+                            if line.startswith("❌"):
+                                any_bad = True
+                            elif line.startswith("⚠️"):
+                                any_needs_review = True
+
+                        # Still treat any non-zero exit as a hard failure, even for info-only scripts.
+                        if rc != 0:
+                            any_bad = True
+
+                        print("")
+
+                    elapsed = time.monotonic() - t0
+                    print(f"\n⏱️  Completed {len(scripts_to_run)} scripts in {_format_duration_mmss(elapsed)}")
+                    print("\n— Summary —")
+                    for name, line in summaries:
+                        print(f"- {name}: {line}")
+
+                    if not any_bad and not any_needs_review:
+                        print("\n✅ Subset completed with clean results (no certificate issued).")
+                    elif not any_bad and any_needs_review:
+                        print("\n⚠️  Some checks suggest opening at least one report.")
+                    else:
+                        print("\n❌ One or more scripts failed — see output above.")
+
+                    input("\n⏎  Press Enter to return to the script menu...")
+                    continue
+
                 if index in script_indices:
                     selected = script_indices[index]
                     clear_terminal()
