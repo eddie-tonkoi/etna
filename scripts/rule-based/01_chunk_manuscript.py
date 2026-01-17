@@ -35,6 +35,7 @@ RULE_HEADING = re.compile(r'^(?:rule|chapter)\s*(?:#\s*)?(\d+)\s*[:.\-–—.]?\
 EPILOGUE_HEADING = re.compile(r'^\s*epilogue\b[:.\-–—.]?\s*(.*)$', re.IGNORECASE)
 
 EXPECTED_STYLES = {"Normal", "Body Text", "Heading 1", "Heading 2", "Heading 3", "Vellum Flush Left", "Vellum Text Conversation", "Vellum Chapter Title", "Vellum Verse", "Vellum Hidden Heading", "Vellum Element Subtitle", "Vellum Centered Text", "Vellum Inline Image", "Quote"}
+MAX_ITEMISE_PER_TYPE = 50
 
 def read_docx_lines_with_checks(path: Path) -> Tuple[List[str], List[Dict[str, Any]]]:
     """
@@ -307,7 +308,16 @@ def main() -> None:
             f.write("\n")
 
             for issue_type, entries in grouped_issues.items():
-                f.write(f"## 🔎 `{issue_type}` — {len(entries)} occurrence(s)\n\n")
+                n = len(entries)
+                f.write(f"## 🔎 `{issue_type}` — {n} occurrence(s)\n\n")
+
+                if n > MAX_ITEMISE_PER_TYPE:
+                    f.write(
+                        f"⚠️ Too many to list ({n} > {MAX_ITEMISE_PER_TYPE}). "
+                        "This section is summarised only.\n\n"
+                    )
+                    continue
+
                 for issue in entries:
                     f.write(f"### 📍 Paragraph: {issue['para_idx']}\n")
                     f.write(f"**Text:** `{issue['text']}`\n")
