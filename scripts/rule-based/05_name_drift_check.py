@@ -144,6 +144,14 @@ parser.add_argument(
     default="en_GB",
     help="Hunspell dictionary code (default: en_GB)",
 )
+parser.add_argument(
+    "--whitelist-file",
+    default=None,
+    help=(
+        "Optional newline-delimited list of deliberate name-forms to ignore. "
+        "Absolute path, or relative to the selected book folder, then repo root."
+    ),
+)
 args = parser.parse_args()
 
 base_path = Path(args.path)
@@ -154,6 +162,49 @@ reports_dir.mkdir(parents=True, exist_ok=True)
 
 
 # ——— Helpers ———
+
+DEFAULT_WHITELIST = "name_drift_whitelist.txt"
+
+
+def resolve_override_path(raw: str | None, default_rel: str) -> Path:
+    """Resolve override files in a predictable order.
+
+    If `raw` is provided:
+      - absolute paths are used as-is
+      - relative paths are tried under the selected book folder first, then repo root
+
+    If `raw` is None:
+      - if config provides `paths.name_drift_whitelist_txt`, use that (repo-relative)
+      - otherwise default to `<book folder>/<default_rel>`
+    """
+    if raw:
+        p = Path(raw).expanduser()
+        if p.is_absolute():
+            return p
+        p1 = (base_path / p).resolve()
+        if p1.exists():
+            return p1
+        p2 = (REPO_ROOT / p).resolve()
+        return p2
+
+    # No CLI override: prefer config key if present
+    cfg_key = "name_drift_whitelist_txt"
+    if isinstance(PATHS, dict) and cfg_key in PATHS and PATHS[cfg_key]:
+        return (REPO_ROOT / PATHS[cfg_key]).resolve()
+
+    return (base_path / default_rel).resolve()
+
+
+def load_whitelist_tokens(path: Path) -> set[str]:
+    """Load a whitelist file with the same rules as dictionaries (supports #include).
+
+    Returns a set of lowercase tokens to ignore from name-drift reporting.
+    """
+    if not path.exists():
+        return set()
+
+    words, _counts = load_dictionary_with_counts(path)
+    return set(words)
 
 TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
 
@@ -266,6 +317,17 @@ if Path(SYSTEM_WORDS).exists():
 
 LOCAL_LEXICON = book_dict | global_dict | system_words
 
+# Optional whitelist for deliberate variants (so they don't appear in the report)
+whitelist_path = resolve_override_path(args.whitelist_file, DEFAULT_WHITELIST)
+WHITELIST_TOKENS = load_whitelist_tokens(whitelist_path)
+
+if WHITELIST_TOKENS:
+    print(f"🧾 Name-drift whitelist loaded: {whitelist_path} ({len(WHITELIST_TOKENS):,} entries)\n")
+else:
+    # Only mention if the path exists, to avoid noise when unused
+    if whitelist_path.exists():
+        print(f"🧾 Name-drift whitelist loaded: {whitelist_path} (0 entries)\n")
+
 print("\n📘 Dictionary entries loaded (per file):")
 for p, n in sorted(book_counts.items(), key=lambda kv: kv[0].name.lower()):
     print(f"  - {p.name}: {n:,}")
@@ -287,11 +349,13 @@ if not occurrences:
 all_lower_tokens = {entry["token_lower"] for entry in occurrences}
 unknown_by_hunspell = hunspell_unknown_words(all_lower_tokens)
 
-# Candidates: unknown to Hunspell AND not in our local lexicon
+# Candidates: unknown to Hunspell AND not in our local lexicon and not whitelisted
 candidate_tokens = {
     t
     for t in unknown_by_hunspell
-    if t not in LOCAL_LEXICON and len(t) >= MIN_TOKEN_LENGTH
+    if t not in LOCAL_LEXICON
+    and t not in WHITELIST_TOKENS
+    and len(t) >= MIN_TOKEN_LENGTH
 }
 
 print(f"🔍 Candidate unknown proper nouns: {len(candidate_tokens)}")
@@ -355,7 +419,8 @@ with report_path.open("w", encoding="utf-8") as out:
         f"- Hunspell dictionary: `{args.hunspell_dict}`\n"
         f"- Minimum canonical frequency: `{MIN_CANON_FREQ}`\n"
         f"- Maximum variant frequency: `{MAX_VARIANT_FREQ}`\n"
-        f"- Minimum fuzzy similarity: `{MIN_FUZZY_SIMILARITY}`\n\n"
+        f"- Minimum fuzzy similarity: `{MIN_FUZZY_SIMILARITY}`\n"
+        f"- Whitelist file: `{whitelist_path}` ({len(WHITELIST_TOKENS):,} entries)\n\n"
     )
 
     out.write("## Dictionaries loaded\n\n")
