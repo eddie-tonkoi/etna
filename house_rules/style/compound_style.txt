@@ -23,7 +23,7 @@ backup <= back-up, back up
 checkup <= check-up
 
 # ——— Time & chronology ———
-timeframe <= time-frame, time frame
+time frame <= time-frame, timeframe
 timeline <= time-line, time line
 timescale <= time-scale, time scale
 yearlong <= year-long
