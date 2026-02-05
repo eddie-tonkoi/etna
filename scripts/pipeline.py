@@ -231,11 +231,16 @@ def canonical_status_line(script_path: Path, rc: int, status_line: Optional[str]
         "(open its report/output if unsure)"
     )
 
-def find_valid_book_folders(books_dir):
-    return sorted([
-        f for f in books_dir.iterdir()
-        if f.is_dir() and any(doc.suffix == ".docx" for doc in f.rglob("*.docx"))
-    ])
+def _has_docx(folder: Path) -> bool:
+    return any(doc.suffix == ".docx" for doc in folder.glob("*.docx"))
+
+
+def list_book_folders(current_dir: Path) -> list[Path]:
+    """List immediate child folders (non-hidden) for navigation."""
+    return sorted(
+        [d for d in current_dir.iterdir() if d.is_dir() and not d.name.startswith(".")],
+        key=lambda p: p.name.lower(),
+    )
 
 def list_scripts(script_dir):
     return sorted([
@@ -836,25 +841,45 @@ def folder_menu():
         print(f"⚠️  Unable to load books_root from common/config.yaml: {e}")
         sys.exit(1)
 
+    dir_stack: list[Path] = [books_root]
+
     while True:
         clear_terminal()
-        print("📚 Choose a book folder:")
-        valid_folders = find_valid_book_folders(books_root)
+        current_dir = dir_stack[-1]
+        print(f"📚 Choose a book folder (current: {current_dir}):")
+        folders = list_book_folders(current_dir)
 
-        if not valid_folders:
-            print("⚠️  No valid book folders found (must contain at least one .docx).")
-            sys.exit(1)
+        if not folders:
+            print("⚠️  No folders found here.")
+            print("\nb  Back;   q  Quit")
+            choice = input("\nSelect a folder: ").strip()
+            if choice.lower() == "q":
+                sys.exit(0)
+            if choice.lower() == "b":
+                if len(dir_stack) > 1:
+                    dir_stack.pop()
+                else:
+                    sys.exit(0)
+            continue
 
         folder_indices: dict[int, Path] = {}
-        for i, folder in enumerate(valid_folders, start=1):
-            print(f"{i}. {folder.name}")
+        for i, folder in enumerate(folders, start=1):
+            icon = "📘" if _has_docx(folder) else "📁"
+            label = "book" if icon == "📘" else "folder"
+            print(f"{i}. {icon} {folder.name} ({label})")
             folder_indices[i] = folder
 
-        print("\nq  Quit")
-        choice = input(f"\nSelect a folder (1-{len(valid_folders)}): ").strip()
+        print("\nb  Back;   q  Quit")
+        choice = input(f"\nSelect a folder (1-{len(folders)}): ").strip()
 
         if choice.lower() == 'q':
             sys.exit(0)
+        if choice.lower() == 'b':
+            if len(dir_stack) > 1:
+                dir_stack.pop()
+            else:
+                sys.exit(0)
+            continue
 
         try:
             index = int(choice)
@@ -864,9 +889,12 @@ def folder_menu():
 
         if index in folder_indices:
             working_dir = folder_indices[index]
-            result = script_folder_menu(working_dir)
-            if result == "back":
-                continue
+            if _has_docx(working_dir):
+                result = script_folder_menu(working_dir)
+                if result == "back":
+                    continue
+            else:
+                dir_stack.append(working_dir)
         else:
             input("Invalid number. Press Enter to continue...")
 
