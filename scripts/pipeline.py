@@ -4,6 +4,8 @@ import subprocess
 import sys
 import time
 import json
+import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple, Union
@@ -128,6 +130,7 @@ STATUS_LINE_RE = re.compile(r"^[✅❌⚠]\uFE0F?\s+")
 STATUS_STORE_FILENAME = ".etna_script_status.json"
 NOT_RUN_ICON = "⏺"  # not yet run in this book folder
 INFO_ONLY_ICON = "📝"  # ran successfully, but is informational/non-gating
+MIXED_STATUS_ICON = "🧩"  # mixed per-segment status
 
 # Scripts that generate useful reports/follow-up artefacts but do NOT “pass/fail” the manuscript.
 # These should not block the correctness certificate.
@@ -233,6 +236,57 @@ def canonical_status_line(script_path: Path, rc: int, status_line: Optional[str]
 
 def _has_docx(folder: Path) -> bool:
     return any(doc.suffix == ".docx" for doc in folder.glob("*.docx"))
+
+
+def list_md_files(folder: Path) -> list[Path]:
+    return sorted(
+        [p for p in folder.glob("*.md") if p.is_file()],
+        key=lambda p: _natural_sort_key(p.name),
+    )
+
+
+def _natural_sort_key(text: str):
+    """Sort strings with numeric chunks as numbers (e.g. 2 before 10)."""
+    parts = re.split(r"(\d+)", text.lower())
+    key = []
+    for part in parts:
+        if part.isdigit():
+            key.append(int(part))
+        else:
+            key.append(part)
+    return key
+
+
+def _aggregate_segment_status(
+    collection_dir: Path,
+    segment_files: list[Path],
+    script_name: str,
+) -> str:
+    """Aggregate per-segment status icons into a single menu icon."""
+    if not segment_files:
+        return NOT_RUN_ICON
+
+    icons: list[str] = []
+    for seg in segment_files:
+        seg_dir = collection_dir / "reports" / seg.stem
+        seg_status = load_last_status(seg_dir)
+        icon = seg_status.get(script_name)
+        if icon:
+            icons.append(icon)
+
+    if not icons:
+        return NOT_RUN_ICON
+
+    if any(i == "❌" for i in icons):
+        return "❌"
+    if any(i == "⚠️" for i in icons):
+        return "⚠️"
+    if any(i == INFO_ONLY_ICON for i in icons):
+        return INFO_ONLY_ICON
+    if len(icons) == len(segment_files) and all(i == "✅" for i in icons):
+        return "✅"
+
+    return MIXED_STATUS_ICON
 
 
 def list_book_folders(current_dir: Path) -> list[Path]:
@@ -612,7 +666,126 @@ def collect_script_groups(scripts_dir: Path) -> dict:
     }
     return groups
 
-def script_menu(working_dir: Path, scripts_dir: Path, method=None):
+def _segment_local_config_files(collection_dir: Path) -> list[Path]:
+    explicit = {
+        "dict_book.txt",
+        "struct_book.txt",
+        "grammar_book.txt",
+        "name_drift_whitelist.txt",
+        "duplicate_whitelist.txt",
+        "coumpound_whitelist.txt",
+    }
+
+    files = []
+    for p in collection_dir.iterdir():
+        if not p.is_file():
+            continue
+        if p.name in explicit or p.name.endswith("_book.txt") or p.name.endswith("_whitelist.txt"):
+            files.append(p)
+    return sorted(files, key=lambda p: p.name.lower())
+
+
+def _copy_reports(src_reports: Path, dest_reports: Path) -> None:
+    if not src_reports.exists():
+        return
+    dest_reports.mkdir(parents=True, exist_ok=True)
+    for path in src_reports.rglob("*"):
+        if path.is_file():
+            rel = path.relative_to(src_reports)
+            dest = dest_reports / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, dest)
+
+
+def _run_script_on_segment(
+    script_path: Path,
+    segment_path: Path,
+    collection_dir: Path,
+) -> Tuple[int, Optional[str]]:
+    temp_dir = Path(tempfile.mkdtemp(prefix=f"etna_segment_{segment_path.stem}_"))
+    try:
+        chapters_dir = temp_dir / "chapters"
+        chapters_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(segment_path, chapters_dir / segment_path.name)
+
+        for cfg in _segment_local_config_files(collection_dir):
+            shutil.copy2(cfg, temp_dir / cfg.name)
+
+        rc, status = run_script(script_path, temp_dir)
+
+        report_dir = collection_dir / "reports" / segment_path.stem
+        _copy_reports(temp_dir / "reports", report_dir)
+
+        line = canonical_status_line(script_path, rc, status)
+        update_last_status(report_dir, script_path.name, rc, line)
+
+        return (rc, line)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def _segment_selection_menu(segment_files: list[Path]) -> list[Path]:
+    """Let the user pick one or more segments; returns selected list."""
+    while True:
+        clear_terminal()
+        print("🎙️ Select podcast segments:")
+        for i, seg in enumerate(segment_files, start=1):
+            print(f"{i}. {seg.name}")
+
+        print("\nEnter a number, comma list (e.g. 1,3,5), or range (e.g. 2-4).")
+        print("a  All segments;   b  Back")
+        choice = input("\nSelection: ").strip().lower()
+
+        if choice == "b":
+            return []
+        if choice == "a":
+            return segment_files
+
+        def parse_indices(raw: str) -> list[int]:
+            items: list[int] = []
+            for part in raw.split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                if "-" in part:
+                    lo_str, hi_str = part.split("-", 1)
+                    lo = int(lo_str.strip())
+                    hi = int(hi_str.strip())
+                    if lo > hi:
+                        lo, hi = hi, lo
+                    items.extend(range(lo, hi + 1))
+                else:
+                    items.append(int(part))
+            return items
+
+        try:
+            indices = parse_indices(choice)
+        except ValueError:
+            input("Invalid input. Press Enter to continue...")
+            continue
+
+        if not indices:
+            input("Invalid input. Press Enter to continue...")
+            continue
+
+        if any(i < 1 or i > len(segment_files) for i in indices):
+            input("Invalid number(s). Press Enter to continue...")
+            continue
+
+        # De-duplicate, preserve original order.
+        seen = set()
+        selected = []
+        for i in indices:
+            if i in seen:
+                continue
+            seen.add(i)
+            selected.append(segment_files[i - 1])
+
+        return selected
+
+
+def script_menu(working_dir: Path, scripts_dir: Path, method=None, segment_files: Optional[list[Path]] = None):
+    active_segments = segment_files[:] if segment_files else None
     while True:
         clear_terminal()
         last_status = load_last_status(working_dir)
@@ -621,8 +794,17 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
             "Scripts": "🧰",
         }
 
-        print("?  Show flags;   b  Back to folder menu;   q  Quit")
-        print(f"Available scripts for 📂 {working_dir.name} (from 📁 {scripts_dir.name}):")
+        if active_segments is not None:
+            print("?  Show flags;   s  Select segments;   b  Back to folder menu;   q  Quit")
+        else:
+            print("?  Show flags;   b  Back to folder menu;   q  Quit")
+        if segment_files:
+            print(
+                f"Available scripts for 🎙️ podcast collection {working_dir.name} "
+                f"({len(active_segments)} of {len(segment_files)} segments) (from 📁 {scripts_dir.name}):"
+            )
+        else:
+            print(f"Available scripts for 📂 {working_dir.name} (from 📁 {scripts_dir.name}):")
 
         scripts = []
         script_indices: dict[int, Union[Path, str]] = {}
@@ -642,7 +824,10 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
             if not method:
                 print(f"\n{emoji} {group}")
             for script in group_scripts:
-                icon = last_status.get(script.name, NOT_RUN_ICON)
+                if segment_files:
+                    icon = _aggregate_segment_status(working_dir, active_segments, script.name)
+                else:
+                    icon = last_status.get(script.name, NOT_RUN_ICON)
                 print(f"{i}. {icon} {script.name}")
                 script_indices[i] = script
                 selected_scripts.append(script)
@@ -656,14 +841,24 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
             input("\n⏎  Press Enter to return to the script-folder menu...")
             return "back"
 
-        choice = input(
-            f"\nChoose script to run in 📂 {working_dir.name} (0 = all; -N = run 1..N): "
-        ).strip()
+        if segment_files:
+            choice = input(
+                f"\nChoose script to run for 🎙️ {working_dir.name} (0 = all; -N = run 1..N): "
+            ).strip()
+        else:
+            choice = input(
+                f"\nChoose script to run in 📂 {working_dir.name} (0 = all; -N = run 1..N): "
+            ).strip()
 
         if choice.lower() == 'q':
             sys.exit(0)
         elif choice.lower() == 'b':
             return "back"
+        elif choice.lower() == 's' and segment_files:
+            selected = _segment_selection_menu(segment_files)
+            if selected:
+                active_segments = selected
+            continue
         elif choice == '?':
             try:
                 hnum = int(input("Which script number to show help for? ").strip())
@@ -698,25 +893,44 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
                     t0 = time.monotonic()
 
                     for script in scripts_to_run:
-                        print(f"\n🔁 Running {script.name}...")
-                        rc, status = run_script(script, working_dir)
-                        line = canonical_status_line(script, rc, status)
-                        update_last_status(working_dir, script.name, rc, line)
+                        if segment_files:
+                            for seg in active_segments:
+                                print(f"\n🔁 Running {script.name} on segment {seg.name}...")
+                                rc, line = _run_script_on_segment(script, seg, working_dir)
+                                summaries.append((f"{script.name} • {seg.name}", line))
 
-                        summaries.append((script.name, line))
+                                # Gate “bad / needs review” only on non-info scripts.
+                                if not is_info_only_script(script.name):
+                                    if line.startswith("❌"):
+                                        any_bad = True
+                                    elif line.startswith("⚠️"):
+                                        any_needs_review = True
 
-                        # Gate “bad / needs review” only on non-info scripts.
-                        if not is_info_only_script(script.name):
-                            if line.startswith("❌"):
+                                # Still treat any non-zero exit as a hard failure, even for info-only scripts.
+                                if rc != 0:
+                                    any_bad = True
+
+                                print("")
+                        else:
+                            print(f"\n🔁 Running {script.name}...")
+                            rc, status = run_script(script, working_dir)
+                            line = canonical_status_line(script, rc, status)
+                            update_last_status(working_dir, script.name, rc, line)
+
+                            summaries.append((script.name, line))
+
+                            # Gate “bad / needs review” only on non-info scripts.
+                            if not is_info_only_script(script.name):
+                                if line.startswith("❌"):
+                                    any_bad = True
+                                elif line.startswith("⚠️"):
+                                    any_needs_review = True
+
+                            # Still treat any non-zero exit as a hard failure, even for info-only scripts.
+                            if rc != 0:
                                 any_bad = True
-                            elif line.startswith("⚠️"):
-                                any_needs_review = True
 
-                        # Still treat any non-zero exit as a hard failure, even for info-only scripts.
-                        if rc != 0:
-                            any_bad = True
-
-                        print("")
+                            print("")
 
                     elapsed = time.monotonic() - t0
                     print(f"\n⏱️  Completed {len(scripts_to_run)} scripts in {_format_duration_mmss(elapsed)}")
@@ -745,25 +959,44 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
                         t0 = time.monotonic()
 
                         for script in selected_scripts:
-                            print(f"\n🔁 Running {script.name}...")
-                            rc, status = run_script(script, working_dir)
-                            line = canonical_status_line(script, rc, status)
-                            update_last_status(working_dir, script.name, rc, line)
+                            if segment_files:
+                                for seg in active_segments:
+                                    print(f"\n🔁 Running {script.name} on segment {seg.name}...")
+                                    rc, line = _run_script_on_segment(script, seg, working_dir)
+                                    summaries.append((f"{script.name} • {seg.name}", line))
 
-                            summaries.append((script.name, line))
+                                    # Gate “bad / needs review” only on non-info scripts.
+                                    if not is_info_only_script(script.name):
+                                        if line.startswith("❌"):
+                                            any_bad = True
+                                        elif line.startswith("⚠️"):
+                                            any_needs_review = True
 
-                            # Gate “bad / needs review” only on non-info scripts.
-                            if not is_info_only_script(script.name):
-                                if line.startswith("❌"):
+                                    # Still treat any non-zero exit as a hard failure, even for info-only scripts.
+                                    if rc != 0:
+                                        any_bad = True
+
+                                    print("")
+                            else:
+                                print(f"\n🔁 Running {script.name}...")
+                                rc, status = run_script(script, working_dir)
+                                line = canonical_status_line(script, rc, status)
+                                update_last_status(working_dir, script.name, rc, line)
+
+                                summaries.append((script.name, line))
+
+                                # Gate “bad / needs review” only on non-info scripts.
+                                if not is_info_only_script(script.name):
+                                    if line.startswith("❌"):
+                                        any_bad = True
+                                    elif line.startswith("⚠️"):
+                                        any_needs_review = True
+
+                                # Still treat any non-zero exit as a hard failure, even for info-only scripts.
+                                if rc != 0:
                                     any_bad = True
-                                elif line.startswith("⚠️"):
-                                    any_needs_review = True
 
-                            # Still treat any non-zero exit as a hard failure, even for info-only scripts.
-                            if rc != 0:
-                                any_bad = True
-
-                            print("")
+                                print("")
 
                         elapsed = time.monotonic() - t0
                         print(f"\n⏱️  Completed all scripts in {_format_duration_mmss(elapsed)}")
@@ -772,11 +1005,14 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
                             print(f"- {name}: {line}")
 
                         if not any_bad and not any_needs_review:
-                            print("\n🎉 All required checks reported clean results.")
+                            if segment_files:
+                                print("\n🎉 All required checks reported clean results.")
+                            else:
+                                print("\n🎉 All required checks reported clean results.")
 
-                            cert = write_correctness_certificate(working_dir, summaries)
-                            if cert is not None:
-                                print(f"📜 Certificate written to {cert}")
+                                cert = write_correctness_certificate(working_dir, summaries)
+                                if cert is not None:
+                                    print(f"📜 Certificate written to {cert}")
                         elif not any_bad and any_needs_review:
                             print("\n⚠️  Some checks suggest opening at least one report.")
                         else:
@@ -784,16 +1020,45 @@ def script_menu(working_dir: Path, scripts_dir: Path, method=None):
 
                         input("\n⏎  Press Enter to return to the script menu...")
                     else:
-                        rc, status = run_script(selected, working_dir)
-                        line = canonical_status_line(selected, rc, status)
-                        update_last_status(working_dir, selected.name, rc, line)
+                        if segment_files:
+                            summaries = []
+                            any_bad = False
+                            any_needs_review = False
+                            for seg in active_segments:
+                                print(f"\n🔁 Running {selected.name} on segment {seg.name}...")
+                                rc, line = _run_script_on_segment(selected, seg, working_dir)
+                                summaries.append((f"{selected.name} • {seg.name}", line))
+
+                                if not is_info_only_script(selected.name):
+                                    if line.startswith("❌"):
+                                        any_bad = True
+                                    elif line.startswith("⚠️"):
+                                        any_needs_review = True
+
+                                if rc != 0:
+                                    any_bad = True
+
+                            print("\n— Summary —")
+                            for name, line in summaries:
+                                print(f"- {name}: {line}")
+
+                            if not any_bad and not any_needs_review:
+                                print("\n✅ Completed with clean results.")
+                            elif not any_bad and any_needs_review:
+                                print("\n⚠️  Some checks suggest opening at least one report.")
+                            else:
+                                print("\n❌ One or more scripts failed — see output above.")
+                        else:
+                            rc, status = run_script(selected, working_dir)
+                            line = canonical_status_line(selected, rc, status)
+                            update_last_status(working_dir, selected.name, rc, line)
                         input("\n⏎  Press Enter to return to the script menu...")
                 else:
                     print("Invalid number.")
             except ValueError:
                 print("Invalid input.")
 
-def script_folder_menu(working_dir: Path):
+def script_folder_menu(working_dir: Path, segment_files: Optional[list[Path]] = None):
     """Second menu: choose a folder next to pipeline.py, then list scripts inside it."""
     scripts_root = Path(__file__).resolve().parent
 
@@ -828,7 +1093,7 @@ def script_folder_menu(working_dir: Path):
 
         if index in folder_indices:
             selected_scripts_dir = folder_indices[index]
-            result = script_menu(working_dir, selected_scripts_dir)
+            result = script_menu(working_dir, selected_scripts_dir, segment_files=segment_files)
             if result == "back":
                 continue
         else:
@@ -864,8 +1129,20 @@ def folder_menu():
 
         folder_indices: dict[int, Path] = {}
         for i, folder in enumerate(folders, start=1):
-            icon = "📘" if _has_docx(folder) else "📁"
-            label = "book" if icon == "📘" else "folder"
+            has_docx = _has_docx(folder)
+            md_files = list_md_files(folder)
+            is_podcast = (not has_docx) and bool(md_files)
+
+            if has_docx:
+                icon = "📘"
+                label = "book"
+            elif is_podcast:
+                icon = "🎙️"
+                label = "podcast"
+            else:
+                icon = "📁"
+                label = "folder"
+
             print(f"{i}. {icon} {folder.name} ({label})")
             folder_indices[i] = folder
 
@@ -889,8 +1166,16 @@ def folder_menu():
 
         if index in folder_indices:
             working_dir = folder_indices[index]
-            if _has_docx(working_dir):
+            has_docx = _has_docx(working_dir)
+            md_files = list_md_files(working_dir)
+            is_podcast = (not has_docx) and bool(md_files)
+
+            if has_docx:
                 result = script_folder_menu(working_dir)
+                if result == "back":
+                    continue
+            elif is_podcast:
+                result = script_folder_menu(working_dir, segment_files=md_files)
                 if result == "back":
                     continue
             else:
