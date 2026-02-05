@@ -332,7 +332,9 @@ def main():
     tool = language_tool_python.LanguageTool('en-GB', remote_server=LT_URL)
 
     results = []
-    chunk_files = sorted(chunk_dir.glob("*.txt"))
+    chunk_files = sorted(
+        list(chunk_dir.glob("*.txt")) + list(chunk_dir.glob("*.md"))
+    )
 
     pbar = tqdm(
         chunk_files,

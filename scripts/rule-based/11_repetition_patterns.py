@@ -98,7 +98,7 @@ MIN_CHAPTER_SHARE = 0.25   # and that chapter has at least this fraction of all 
 
 def analyse_book(chapters_dir: Path, nlp):
     """
-    Walk through all chapter .txt files, count FOCUS_LEMMAS by lemma and by chapter.
+    Walk through all chapter .txt/.md files, count FOCUS_LEMMAS by lemma and by chapter.
     Returns:
         total_counts: Counter[lemma] -> total uses in book
         per_chapter_counts: dict[lemma] -> Counter[chapter_name] -> count
@@ -108,7 +108,9 @@ def analyse_book(chapters_dir: Path, nlp):
     per_chapter_counts = defaultdict(Counter)
     chapter_order = []
 
-    chapter_files = sorted(chapters_dir.glob("*.txt"))
+    chapter_files = sorted(
+        list(chapters_dir.glob("*.txt")) + list(chapters_dir.glob("*.md"))
+    )
 
     pbar = tqdm(
         chapter_files,
@@ -230,7 +232,7 @@ def main():
         description="Report on repetition of selected 'focus' lemmas (gestures, reactions, intensifiers)."
     )
     parser.add_argument("path", nargs="?", default=".", help="Path to project folder (default: current directory)")
-    parser.add_argument("--chapters-dir", default="chapters", help="Folder with chunked .txt files (default: chapters)")
+    parser.add_argument("--chapters-dir", default="chapters", help="Folder with chunked .txt/.md files (default: chapters)")
     parser.add_argument("--reports-dir", default="reports", help="Folder for reports (default: reports)")
     parser.add_argument(
         "--spacy-model",

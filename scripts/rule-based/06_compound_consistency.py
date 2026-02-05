@@ -61,7 +61,7 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("path", nargs="?", default=".", help="Base project folder")
 parser.add_argument(
-    "--chapters-dir", default="chapters", help="Folder with chunked .txt files"
+    "--chapters-dir", default="chapters", help="Folder with chunked .txt/.md files"
 )
 parser.add_argument(
     "--reports-dir", default="reports", help="Folder for markdown reports"
@@ -237,7 +237,7 @@ if not chapters_dir.exists():
     sys.exit(1)
 
 for path in tqdm(
-    sorted(chapters_dir.glob("*.txt")),
+    sorted(list(chapters_dir.glob("*.txt")) + list(chapters_dir.glob("*.md"))),
     desc="Scanning chapters",
     dynamic_ncols=True,
     file=sys.stdout,

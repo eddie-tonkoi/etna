@@ -575,7 +575,9 @@ def main():
     ignored_phrases = {line for line in suppressions if not line.isupper()}
 
     grammar_issues = []
-    chunk_files = sorted(chunk_dir.glob("*.txt"))
+    chunk_files = sorted(
+        list(chunk_dir.glob("*.txt")) + list(chunk_dir.glob("*.md"))
+    )
 
     pbar = tqdm(
         chunk_files,

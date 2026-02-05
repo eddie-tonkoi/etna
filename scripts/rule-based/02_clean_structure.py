@@ -503,7 +503,9 @@ def main():
         return
 
     all_issues = []
-    chunk_files = sorted(chunk_dir.glob("*.txt"))
+    chunk_files = sorted(
+        list(chunk_dir.glob("*.txt")) + list(chunk_dir.glob("*.md"))
+    )
     for file in chunk_files:
         text = file.read_text(encoding="utf-8")
         issues = run_checks(text, custom_entries)

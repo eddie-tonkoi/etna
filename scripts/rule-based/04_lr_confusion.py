@@ -238,7 +238,7 @@ def main() -> None:
         description="Flag likely L↔R confusions where L/R is the SECOND consonant of a syllable (internal only)."
     )
     parser.add_argument("path", nargs="?", default=".", help="Path to project folder (default: current directory)")
-    parser.add_argument("--chapters-dir", default="chapters", help="Folder with chunked .txt files (default: chapters)")
+    parser.add_argument("--chapters-dir", default="chapters", help="Folder with chunked .txt/.md files (default: chapters)")
     parser.add_argument("--reports-dir", default="reports", help="Folder for reports (default: reports)")
     parser.add_argument("--allow-file", help="Optional: extra allowed target words (one per line)")
     args = parser.parse_args()
@@ -300,7 +300,10 @@ def main() -> None:
         sys.exit(1)
 
     all_issues: list[dict] = []
-    for p in sorted(chunk_dir.glob("*.txt")):
+    chunk_files = sorted(
+        list(chunk_dir.glob("*.txt")) + list(chunk_dir.glob("*.md"))
+    )
+    for p in chunk_files:
         text = p.read_text(encoding="utf-8", errors="ignore")
         all_issues.extend(run_checks(text, p.name, lexicon, allow_targets))
 

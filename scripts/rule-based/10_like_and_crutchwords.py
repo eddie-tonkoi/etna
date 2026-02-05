@@ -246,7 +246,9 @@ def main():
 
     cliche_matches = defaultdict(list)  # phrase → list of (chapter, context)
 
-    chapter_files = sorted(chapter_dir.glob("*.txt"))
+    chapter_files = sorted(
+        list(chapter_dir.glob("*.txt")) + list(chapter_dir.glob("*.md"))
+    )
 
     pbar = tqdm(
         chapter_files,

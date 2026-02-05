@@ -10,7 +10,7 @@ useful for catching stock phrases that have drifted.
 It works in several stages:
 
 1. **Extracts meaningful lines from each chapter**
-   - Loads each `.txt` file in `chapters/`.
+   - Loads each `.txt` or `.md` file in `chapters/`.
    - Strips chapter headings.
    - Ignores very short lines and common structural headings such as
      *Tuesday afternoon*, *Sunday evening*, or all‑caps register labels.
@@ -199,7 +199,9 @@ def has_token_overlap(a, b, threshold=TOKEN_OVERLAP_THRESHOLD):
 
 # ——— Build phrase list ———
 all_phrases = []
-chapter_files = sorted(chunk_dir.glob("*.txt"))
+chapter_files = sorted(
+    list(chunk_dir.glob("*.txt")) + list(chunk_dir.glob("*.md"))
+)
 
 for file in tqdm(
     chapter_files,

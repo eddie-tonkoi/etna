@@ -134,7 +134,7 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("path", nargs="?", default=".", help="Base project folder")
 parser.add_argument(
-    "--chapters-dir", default="chapters", help="Folder with chunked .txt files"
+    "--chapters-dir", default="chapters", help="Folder with chunked .txt/.md files"
 )
 parser.add_argument(
     "--reports-dir", default="reports", help="Folder for markdown reports"
@@ -223,7 +223,10 @@ def collect_capitalised_tokens():
         print(f"❌ No '{args.chapters_dir}' directory at {chapters_dir}")
         return occurrences, counts
 
-    for path in tqdm(sorted(chapters_dir.glob("*.txt")), desc="Scanning chapters"):
+    chapter_files = sorted(
+        list(chapters_dir.glob("*.txt")) + list(chapters_dir.glob("*.md"))
+    )
+    for path in tqdm(chapter_files, desc="Scanning chapters"):
         text = path.read_text(encoding="utf-8", errors="ignore")
         lines = text.splitlines()
         for line_no, line in enumerate(lines, start=1):

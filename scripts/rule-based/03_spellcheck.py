@@ -2,7 +2,7 @@
 """
 ## Spelling Check — what this script does
 
-This script takes the chunked `.txt` files from the `chapters/` folder and runs
+This script takes the chunked `.txt` and `.md` files from the `chapters/` folder and runs
 a spelling pass over them using Hunspell, plus a couple of house-style layers on
 top.
 
@@ -567,9 +567,11 @@ def main():
     flag_words = load_flag_words(FLAG_WORDS_FILE)
 
     spelling = []
-    chunk_files = sorted(chunk_dir.glob("*.txt"))
+    chunk_files = sorted(
+        list(chunk_dir.glob("*.txt")) + list(chunk_dir.glob("*.md"))
+    )
     if not chunk_files:
-        print(f"❌ No .txt files found in {chunk_dir}")
+        print(f"❌ No .txt or .md files found in {chunk_dir}")
         return
 
     pbar = tqdm(
