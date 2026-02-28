@@ -1,3 +1,5 @@
+alright => all right unless slang or youthful text-messaging 
+
 yogurt => yoghurt
 color => colour
 favorite => favourite
