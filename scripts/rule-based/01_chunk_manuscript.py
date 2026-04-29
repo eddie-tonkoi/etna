@@ -32,7 +32,7 @@ from typing import Any, Dict, List, Tuple
 # ——— Helpers ———
 
 RULE_HEADING = re.compile(r'^(?:rule|chapter|kapitel|Capítulo)\s*(?:#\s*)?(\d+)\s*[:.\-–—.]?\s*(.*)$', re.IGNORECASE)
-EPILOGUE_HEADING = re.compile(r'^\s*epilogue\b[:.\-–—.]?\s*(.*)$', re.IGNORECASE)
+EPILOGUE_HEADING = re.compile(r'^\s*epilogue|epilog|Epílogo\b[:.\-–—.]?\s*(.*)$', re.IGNORECASE)
 
 EXPECTED_STYLES = {"Normal", "Body Text", "Heading 1", "Heading 2", "Heading 3", "Vellum Flush Left", "Vellum Text Conversation", "Vellum Chapter Title", "Vellum Verse", "Vellum Hidden Heading", "Vellum Element Subtitle", "Vellum Centered Text", "Vellum Inline Image", "Quote"}
 MAX_ITEMISE_PER_TYPE = 50
