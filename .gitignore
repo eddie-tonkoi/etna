@@ -20,3 +20,6 @@ Icon?
 .venv/
 venv/
 env/
+
+# Other files
+.clinerules/
