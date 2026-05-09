@@ -1,0 +1,57 @@
+{
+  "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "llmPrompt",
+      "type": "promptString",
+      "description": "Enter your question or instruction for the LLM",
+      "default": "Can you explain or improve this code?"
+    }
+  ],
+  "tasks": [
+    {
+      "label": "Launch Coding Role Model",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": ["shared/multi_llama_manager.py", "--role", "coding_fast"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Ask LLM (open files)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "src/tools/ask_llm.py",
+        "--files",
+        "--prompt", "${input:llmPrompt}",
+        "--chat"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Ask LLM (with current file)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "src/tools/ask_llm.py",
+        "--file",
+        "${file}",
+        "--prompt",
+        "${input:llmPrompt}"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
